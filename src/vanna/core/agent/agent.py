@@ -1011,12 +1011,12 @@ class Agent:
                     conversation, tool_schemas, user, system_prompt
                 )
             else:
-                # Update status to idle and set completion message
+                # Update status to idle and clear status bar
                 yield UiComponent(  # type: ignore
                     rich_component=StatusBarUpdateComponent(
                         status="idle",
-                        message="Response complete",
-                        detail="Ready for next message",
+                        message="",
+                        detail="",
                     )
                 )
 

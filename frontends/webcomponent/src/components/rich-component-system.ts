@@ -492,21 +492,19 @@ export class StatusIndicatorComponentRenderer extends BaseComponentRenderer {
   }
 }
 
-// DataFrame component renderer
+// DataFrame component renderer (JetBrains DataGrip Style - Server-Driven)
 export class DataFrameComponentRenderer extends BaseComponentRenderer {
   render(component: RichComponent): HTMLElement {
     const container = document.createElement('div');
     container.className = 'rich-component rich-dataframe';
     container.dataset.componentId = component.id;
+    ensureRichComponentStyles(container);
 
     const {
       data = [],
       columns = [],
       title,
       description,
-      row_count = 0,
-      column_count = 0,
-      max_rows_displayed = 100,
       searchable = true,
       sortable = true,
       filterable = true,
@@ -514,109 +512,898 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       striped = true,
       bordered = true,
       compact = false,
-      column_types = {}
+      column_types = {},
+      total_rows = data.length,
+      output_file = null
     } = component.data;
 
-    // Limit displayed rows
-    const displayedData = data.slice(0, max_rows_displayed);
-    const hasMoreRows = data.length > max_rows_displayed;
+    // Table state
+    const state = {
+      outputFile: output_file,
+      pageData: data.slice(0, 25),
+      columns: columns.length > 0 ? columns : (data[0] ? Object.keys(data[0]) : []),
+      totalRows: total_rows || data.length,
+      filteredRows: total_rows || data.length,
+      currentPage: 1,
+      pageSize: 25 as number | 'all',
+      sortColumn: null as string | null,
+      sortDirection: null as 'asc' | 'desc' | null,
+      globalSearch: '',
+      columnFilters: {} as Record<string, Set<any>>,
+      startRow: data.length > 0 ? 1 : 0,
+      endRow: Math.min(25, data.length),
+      isLoading: false,
+      activeView: 'table' as 'table' | 'bar' | 'line' | 'pie'
+    };
 
-    let headerHTML = '';
-    if (title || description) {
-      headerHTML = `
+    // Client-side chart builder for view tabs
+    const renderChartForView = (viewType: 'bar' | 'line' | 'pie') => {
+      const chartElement = container.querySelector('plotly-chart') as any;
+      if (!chartElement) return;
+
+      const rows = state.pageData && state.pageData.length > 0 ? state.pageData : data;
+      const cols = state.columns && state.columns.length > 0 ? state.columns : (rows[0] ? Object.keys(rows[0]) : []);
+
+      if (!rows || rows.length === 0 || !cols || cols.length === 0) {
+        chartElement.data = [];
+        chartElement.layout = { title: 'No Data Available' };
+        return;
+      }
+
+      const sampleRow = rows[0] || {};
+
+      // Identify date column
+      const dateCol = cols.find((c: string) => {
+        const lower = String(c).toLowerCase();
+        return ['date', 'time', 'created_at', 'timestamp', 'updated_at'].some((kw: string) => lower.includes(kw));
+      });
+
+      // Identify numeric columns
+      const numCols = cols.filter((c: string) => {
+        const val = sampleRow[c];
+        const lower = String(c).toLowerCase();
+        if (['id', 'index', 'row_id', 'complaint_number'].includes(lower)) return false;
+        return typeof val === 'number' || (!isNaN(Number(val)) && val !== '' && val !== null);
+      });
+
+      // Identify categorical column
+      const catCol = cols.find((c: string) => {
+        const lower = String(c).toLowerCase();
+        if (['id', 'index', 'row_id', 'complaint_number'].includes(lower)) return false;
+        return c !== dateCol && !numCols.includes(c);
+      }) || dateCol || cols[0];
+
+      let plotlyTraces: any[] = [];
+      let plotlyLayout: any = {
+        autosize: true,
+        margin: { t: 40, r: 30, b: 60, l: 60 },
+        font: { family: 'system-ui, -apple-system, sans-serif' },
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent'
+      };
+
+      const palette = ['#15a8a8', '#fe5d26', '#bf1363', '#023d60'];
+
+      if (viewType === 'bar') {
+        plotlyLayout.title = `${title || 'Data Analysis'} - Bar Chart`;
+        if (catCol && numCols.length > 0) {
+          const topRows = rows.slice(0, 20);
+          const xVals = topRows.map((r: any) => r[catCol]);
+          plotlyTraces = numCols.slice(0, 4).map((nc: string, idx: number) => ({
+            x: xVals,
+            y: topRows.map((r: any) => Number(r[nc]) || 0),
+            name: nc,
+            type: 'bar',
+            marker: { color: palette[idx % palette.length] }
+          }));
+          plotlyLayout.barmode = numCols.length > 1 ? 'group' : 'stack';
+        } else if (catCol) {
+          const freqMap: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            const k = String(r[catCol] ?? 'N/A');
+            freqMap[k] = (freqMap[k] || 0) + 1;
+          });
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
+          plotlyTraces = [{
+            x: sorted.map(e => e[0]),
+            y: sorted.map(e => e[1]),
+            type: 'bar',
+            marker: { color: '#fe5d26' }
+          }];
+        }
+      } else if (viewType === 'line') {
+        plotlyLayout.title = `${title || 'Data Analysis'} - Trend Graph`;
+        const timeCol = dateCol || catCol;
+        const topRows = rows.slice(0, 50);
+        const xVals = topRows.map((r: any) => r[timeCol]);
+
+        if (numCols.length > 0) {
+          plotlyTraces = numCols.slice(0, 4).map((nc: string, idx: number) => ({
+            x: xVals,
+            y: topRows.map((r: any) => Number(r[nc]) || 0),
+            name: nc,
+            mode: 'lines+markers',
+            type: 'scatter',
+            line: { color: palette[idx % palette.length] }
+          }));
+        } else {
+          const freqMap: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            const k = String(r[timeCol] ?? 'N/A');
+            freqMap[k] = (freqMap[k] || 0) + 1;
+          });
+          const entries = Object.entries(freqMap);
+          plotlyTraces = [{
+            x: entries.map(e => e[0]),
+            y: entries.map(e => e[1]),
+            mode: 'lines+markers',
+            type: 'scatter',
+            line: { color: '#15a8a8' }
+          }];
+        }
+      } else if (viewType === 'pie') {
+        plotlyLayout.title = `${title || 'Data Analysis'} - Pie Chart`;
+        if (catCol && numCols.length > 0) {
+          const topRows = rows.slice(0, 10);
+          plotlyTraces = [{
+            labels: topRows.map((r: any) => r[catCol]),
+            values: topRows.map((r: any) => Number(r[numCols[0]]) || 0),
+            type: 'pie',
+            hole: 0.3,
+            textinfo: 'label+percent'
+          }];
+        } else if (catCol) {
+          const freqMap: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            const k = String(r[catCol] ?? 'N/A');
+            freqMap[k] = (freqMap[k] || 0) + 1;
+          });
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+          plotlyTraces = [{
+            labels: sorted.map(e => e[0]),
+            values: sorted.map(e => e[1]),
+            type: 'pie',
+            hole: 0.3,
+            textinfo: 'label+percent'
+          }];
+        }
+      }
+
+      chartElement.data = plotlyTraces;
+      chartElement.layout = plotlyLayout;
+    };
+
+    // Server-side data fetcher
+    const fetchServerData = async (distinctCol?: string) => {
+      if (!state.outputFile) return null;
+
+      state.isLoading = true;
+      showLoadingState();
+
+      try {
+        const formattedFilters: Record<string, any[]> = {};
+        Object.keys(state.columnFilters).forEach(col => {
+          const setVal = state.columnFilters[col];
+          if (setVal && setVal.size > 0) {
+            formattedFilters[col] = Array.from(setVal);
+          }
+        });
+
+        const res = await fetch('/api/vanna/v2/grid/data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            output_file: state.outputFile,
+            page: state.currentPage,
+            page_size: state.pageSize,
+            sort_column: state.sortColumn,
+            sort_direction: state.sortDirection,
+            global_search: state.globalSearch,
+            column_filters: formattedFilters,
+            distinct_column: distinctCol || null
+          })
+        });
+
+        if (!res.ok) throw new Error(`Grid API error: ${res.status}`);
+
+        const result = await res.json();
+        state.pageData = result.rows || [];
+        state.columns = result.columns || state.columns;
+        state.totalRows = result.total_rows ?? state.totalRows;
+        state.filteredRows = result.filtered_rows ?? state.filteredRows;
+        state.currentPage = result.page ?? state.currentPage;
+        state.startRow = result.start_row ?? 0;
+        state.endRow = result.end_row ?? 0;
+
+        if (state.activeView !== 'table') {
+          renderChartForView(state.activeView);
+        }
+        return result;
+      } catch (err) {
+        console.warn('⚠️ Server-side grid fetch failed, using local slice:', err);
+        return null;
+      } finally {
+        state.isLoading = false;
+        hideLoadingState();
+      }
+    };
+
+    // Client-side fallback slice calculator
+    const computeClientFallback = () => {
+      let result = [...data];
+
+      if (state.globalSearch.trim()) {
+        const query = state.globalSearch.toLowerCase().trim();
+        result = result.filter(row =>
+          state.columns.some((col: string) =>
+            String(row[col] ?? '').toLowerCase().includes(query)
+          )
+        );
+      }
+
+      Object.keys(state.columnFilters).forEach(col => {
+        const allowedSet = state.columnFilters[col];
+        if (allowedSet && allowedSet.size > 0) {
+          result = result.filter(row => allowedSet.has(row[col]));
+        }
+      });
+
+      if (state.sortColumn && state.sortDirection) {
+        const col = state.sortColumn;
+        const dir = state.sortDirection;
+        result.sort((a, b) => {
+          const aVal = a[col];
+          const bVal = b[col];
+          if (aVal === null || aVal === undefined) return 1;
+          if (bVal === null || bVal === undefined) return -1;
+          if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return dir === 'asc' ? aVal - bVal : bVal - aVal;
+          }
+          const aStr = String(aVal).toLowerCase();
+          const bStr = String(bVal).toLowerCase();
+          const comp = aStr.localeCompare(bStr);
+          return dir === 'asc' ? comp : -comp;
+        });
+      }
+
+      state.filteredRows = result.length;
+      let pageSizeNum = state.pageSize === 'all' ? result.length : Number(state.pageSize);
+      if (pageSizeNum <= 0) pageSizeNum = 25;
+
+      const totalPages = Math.max(1, Math.ceil(result.length / pageSizeNum));
+      if (state.currentPage > totalPages) state.currentPage = totalPages;
+      if (state.currentPage < 1) state.currentPage = 1;
+
+      const start = state.pageSize === 'all' ? 0 : (state.currentPage - 1) * pageSizeNum;
+      const end = state.pageSize === 'all' ? result.length : Math.min(start + pageSizeNum, result.length);
+
+      state.pageData = result.slice(start, end);
+      state.startRow = result.length > 0 ? start + 1 : 0;
+      state.endRow = end;
+
+      if (state.activeView !== 'table') {
+        renderChartForView(state.activeView);
+      }
+    };
+
+    const showLoadingState = () => {
+      const tbody = container.querySelector('tbody');
+      if (tbody) {
+        tbody.style.opacity = '0.5';
+        tbody.style.pointerEvents = 'none';
+      }
+    };
+
+    const hideLoadingState = () => {
+      const tbody = container.querySelector('tbody');
+      if (tbody) {
+        tbody.style.opacity = '1';
+        tbody.style.pointerEvents = 'auto';
+      }
+    };
+
+    const updateView = async () => {
+      if (state.outputFile) {
+        await fetchServerData();
+      } else {
+        computeClientFallback();
+      }
+
+      const totalPages = state.pageSize === 'all'
+        ? 1
+        : Math.max(1, Math.ceil(state.filteredRows / Number(state.pageSize || 25)));
+
+      // Render Top Bar with View Switcher Tabs
+      const headerHTML = `
         <div class="dataframe-header">
-          ${title ? `<h3 class="dataframe-title">${title}</h3>` : ''}
-          ${description ? `<p class="dataframe-description">${description}</p>` : ''}
-          <div class="dataframe-meta">
-            <span class="row-count">${row_count} rows</span>
-            <span class="column-count">${column_count} columns</span>
+          <div class="dataframe-header-top">
+            <div>
+              <h3 class="dataframe-title">${this.escapeHtml(title || 'Query Results')}</h3>
+              ${description ? `<p class="dataframe-description">${this.escapeHtml(description)}</p>` : ''}
+              <div class="dataframe-meta">
+                <span class="row-count">${state.filteredRows} of ${state.totalRows} total rows</span>
+                <span class="column-count">${state.columns.length} columns</span>
+              </div>
+            </div>
+
+            <div class="view-switcher-tabs">
+              <button class="view-tab-btn ${state.activeView === 'table' ? 'active' : ''}" data-view="table">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                Table
+              </button>
+              <button class="view-tab-btn ${state.activeView === 'bar' ? 'active' : ''}" data-view="bar">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                Bar Chart
+              </button>
+              <button class="view-tab-btn ${state.activeView === 'line' ? 'active' : ''}" data-view="line">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
+                Trend Graph
+              </button>
+              <button class="view-tab-btn ${state.activeView === 'pie' ? 'active' : ''}" data-view="pie">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                Pie Chart
+              </button>
+            </div>
           </div>
         </div>
       `;
-    }
 
-    let actionsHTML = '';
-    if (searchable || exportable || filterable) {
-      actionsHTML = `
-        <div class="dataframe-actions">
-          ${searchable ? `
-            <div class="dataframe-search">
-              <input type="text" placeholder="Search..." class="search-input">
+      const isAnyFilterActive = state.globalSearch.trim() !== '' || Object.values(state.columnFilters).some(s => s && s.size > 0);
+
+      let actionsHTML = '';
+      if (searchable || exportable) {
+        actionsHTML = `
+          <div class="dataframe-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--vanna-outline-dimmer, #e1e4e8);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${searchable ? `
+                <div class="dataframe-search" style="position: relative;">
+                  <input type="text" placeholder="Search grid (Ctrl+F)..." value="${this.escapeHtml(state.globalSearch)}" class="search-input" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d7de; border-radius: 6px; width: 200px;">
+                </div>
+              ` : ''}
+              ${isAnyFilterActive ? `
+                <button class="clear-filters-btn" style="padding: 4px 8px; font-size: 11px; color: #cf222e; background: #ffebe9; border: 1px solid rgba(255,129,130,0.4); border-radius: 4px; cursor: pointer;">
+                  ✕ Clear Filters
+                </button>
+              ` : ''}
             </div>
-          ` : ''}
-          ${exportable ? `
-            <button class="export-btn" title="Export to CSV">📥 Export</button>
-          ` : ''}
-        </div>
-      `;
-    }
 
-    let tableHTML = '';
-    if (columns.length > 0 && displayedData.length > 0) {
-      const tableClasses = [
-        'dataframe-table',
-        striped ? 'striped' : '',
-        bordered ? 'bordered' : '',
-        compact ? 'compact' : ''
-      ].filter(Boolean).join(' ');
+            <div class="dataframe-actions-right">
+              ${exportable ? `
+                <div class="export-dropdown-container">
+                  <button class="export-main-btn">
+                    <span>📥 Export</span>
+                    <span style="font-size: 9px;">▼</span>
+                  </button>
+                  <div class="export-menu">
+                    <button class="export-menu-item" data-export-type="csv">📄 Export to CSV (.csv)</button>
+                    <button class="export-menu-item" data-export-type="excel">📊 Export to Excel (.xlsx)</button>
+                    <button class="export-menu-item" data-export-type="pdf">🖨️ Export to PDF / Print</button>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }
 
-      tableHTML = `
-        <div class="dataframe-table-container">
-          <table class="${tableClasses}">
-            <thead>
-              <tr>
-                ${columns.map((col: string) => `
-                  <th class="${sortable ? 'sortable' : ''}" data-column="${col}">
-                    ${col}
-                    ${sortable ? '<span class="sort-indicator"></span>' : ''}
-                  </th>
-                `).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${displayedData.map((row: any) => `
+      // Render Table Grid
+      let tableHTML = '';
+      if (state.columns.length > 0 && state.pageData.length > 0) {
+        const tableClasses = [
+          'dataframe-table',
+          'jetbrains-table',
+          striped ? 'striped' : '',
+          bordered ? 'bordered' : '',
+          compact ? 'compact' : ''
+        ].filter(Boolean).join(' ');
+
+        tableHTML = `
+          <div class="dataframe-table-container" style="overflow-x: auto;">
+            <table class="${tableClasses}">
+              <thead>
                 <tr>
-                  ${columns.map((col: string) => {
-                    const value = row[col];
-                    const columnType = column_types[col] || 'string';
-                    const formattedValue = this.formatCellValue(value, columnType);
-                    return `<td class="cell-${columnType}">${formattedValue}</td>`;
-                  }).join('')}
+                  <th class="row-num-cell" style="width: 44px; text-align: center; color: #8c959f; font-weight: 600;">#</th>
+                  ${state.columns.map((col: string) => {
+          const isSorted = state.sortColumn === col;
+          const sortIcon = isSorted ? (state.sortDirection === 'asc' ? '↑' : '↓') : '';
+          const isFiltered = !!(state.columnFilters[col] && state.columnFilters[col].size > 0);
+
+          return `
+                      <th class="${sortable ? 'sortable' : ''}" data-column="${this.escapeHtml(col)}">
+                        <div class="th-content">
+                          <span class="col-name" title="${this.escapeHtml(col)}">${this.escapeHtml(col)}</span>
+                          ${sortable ? `<span class="sort-indicator">${sortIcon}</span>` : ''}
+                          ${filterable ? `
+                            <button class="col-filter-btn ${isFiltered ? 'active' : ''}" data-column="${this.escapeHtml(col)}" title="Filter column ${this.escapeHtml(col)}">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                            </button>
+                          ` : ''}
+                        </div>
+                      </th>
+                    `;
+        }).join('')}
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          ${hasMoreRows ? `
-            <div class="dataframe-truncated">
-              <em>Showing ${max_rows_displayed} of ${row_count} rows</em>
-            </div>
-          ` : ''}
+              </thead>
+              <tbody>
+                ${state.pageData.map((row: any, idx: number) => {
+          const globalRowIndex = state.startRow + idx;
+          return `
+                    <tr>
+                      <td class="row-num-cell">${globalRowIndex}</td>
+                      ${state.columns.map((col: string) => {
+            const value = row[col];
+            const columnType = column_types[col] || (typeof value === 'number' ? 'number' : 'string');
+            const formattedValue = this.formatCellValue(value, columnType);
+            return `<td class="cell-${columnType}">${formattedValue}</td>`;
+          }).join('')}
+                    </tr>
+                  `;
+        }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        tableHTML = `
+          <div class="dataframe-empty" style="padding: 24px; text-align: center; color: #8c959f;">
+            <p>No matching data found</p>
+          </div>
+        `;
+      }
+
+      // Render Pagination Bar
+      let paginationHTML = '';
+      const rangeText = state.filteredRows > 0
+        ? `${state.startRow} - ${state.endRow} of ${state.filteredRows}`
+        : '0 rows';
+
+      paginationHTML = `
+        <div class="jetbrains-pagination-bar">
+          <div class="page-nav-group">
+            <button class="page-nav-btn page-first" ${state.currentPage <= 1 ? 'disabled' : ''} title="First Page">|◄</button>
+            <button class="page-nav-btn page-prev" ${state.currentPage <= 1 ? 'disabled' : ''} title="Previous Page">◄</button>
+            <span class="page-range-info">${rangeText}</span>
+            <button class="page-nav-btn page-next" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Next Page">►</button>
+            <button class="page-nav-btn page-last" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Last Page">►|</button>
+          </div>
+
+          <div class="page-size-selector">
+            <span>Rows:</span>
+            <select class="page-size-select">
+              <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
+              <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
+              <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
+              <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
+              <option value="500" ${state.pageSize === 500 ? 'selected' : ''}>500</option>
+              <option value="all" ${state.pageSize === 'all' ? 'selected' : ''}>All</option>
+            </select>
+          </div>
         </div>
       `;
-    } else {
-      tableHTML = `
-        <div class="dataframe-empty">
-          <p>No data to display</p>
+
+      const showTable = state.activeView === 'table';
+
+      container.innerHTML = `
+        ${headerHTML}
+        <div class="grid-view-table-section" style="display: ${showTable ? 'block' : 'none'};">
+          ${actionsHTML}
+          ${tableHTML}
+          ${paginationHTML}
+        </div>
+        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'};">
+          <plotly-chart></plotly-chart>
         </div>
       `;
-    }
 
-    container.innerHTML = `
-      ${headerHTML}
-      ${actionsHTML}
-      ${tableHTML}
-    `;
+      // Re-bind interactive event listeners
+      bindEvents();
 
+      if (!showTable) {
+        requestAnimationFrame(() => {
+          renderChartForView(state.activeView as 'bar' | 'line' | 'pie');
+        });
+      }
+    };
 
-    // Add event listeners
-    this.attachEventListeners(container, displayedData, columns);
+    const bindEvents = () => {
+      // 0. View Switcher Tabs
+      container.querySelectorAll('.view-tab-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const targetView = (btn as HTMLElement).dataset.view as 'table' | 'bar' | 'line' | 'pie';
+          if (!targetView || targetView === state.activeView) return;
+
+          state.activeView = targetView;
+
+          container.querySelectorAll('.view-tab-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const tableSec = container.querySelector('.grid-view-table-section') as HTMLElement;
+          const chartSec = container.querySelector('.grid-view-chart-section') as HTMLElement;
+
+          if (targetView === 'table') {
+            if (tableSec) tableSec.style.display = 'block';
+            if (chartSec) chartSec.style.display = 'none';
+          } else {
+            if (tableSec) tableSec.style.display = 'none';
+            if (chartSec) chartSec.style.display = 'block';
+            renderChartForView(targetView);
+          }
+        });
+      });
+
+      // 1. Global Search Input (Debounced 250ms)
+      const searchInput = container.querySelector('.search-input') as HTMLInputElement;
+      if (searchInput) {
+        let debounceTimer: any = null;
+        searchInput.addEventListener('input', (e) => {
+          const val = (e.target as HTMLInputElement).value;
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            state.globalSearch = val;
+            state.currentPage = 1;
+            updateView();
+          }, 250);
+        });
+      }
+
+      // Clear filters button
+      const clearFiltersBtn = container.querySelector('.clear-filters-btn') as HTMLButtonElement;
+      if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+          state.globalSearch = '';
+          state.columnFilters = {};
+          state.currentPage = 1;
+          updateView();
+        });
+      }
+
+      // 2. Export Menu Toggle & Streaming Export Handlers
+      const exportMainBtn = container.querySelector('.export-main-btn') as HTMLButtonElement;
+      const exportMenu = container.querySelector('.export-menu') as HTMLElement;
+      if (exportMainBtn && exportMenu) {
+        exportMainBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          exportMenu.classList.toggle('open');
+        });
+
+        document.addEventListener('click', () => {
+          exportMenu.classList.remove('open');
+        }, { once: true });
+
+        const exportItems = container.querySelectorAll('.export-menu-item');
+        exportItems.forEach(item => {
+          item.addEventListener('click', (e) => {
+            const exportType = (e.currentTarget as HTMLElement).dataset.exportType as 'csv' | 'excel' | 'pdf';
+            this.handleExport(state, exportType, title);
+            exportMenu.classList.remove('open');
+          });
+        });
+      }
+
+      // 3. Sorting on Column Header Click (excluding filter button click)
+      if (sortable) {
+        const sortableHeaders = container.querySelectorAll('th.sortable');
+        sortableHeaders.forEach(header => {
+          header.addEventListener('click', (e) => {
+            if ((e.target as HTMLElement).closest('.col-filter-btn')) {
+              return;
+            }
+
+            const col = (header as HTMLElement).dataset.column;
+            if (!col) return;
+
+            if (state.sortColumn === col) {
+              if (state.sortDirection === 'asc') {
+                state.sortDirection = 'desc';
+              } else if (state.sortDirection === 'desc') {
+                state.sortColumn = null;
+                state.sortDirection = null;
+              }
+            } else {
+              state.sortColumn = col;
+              state.sortDirection = 'asc';
+            }
+            updateView();
+          });
+        });
+      }
+
+      // 4. Filter Button Click (Opens JetBrains Filter Popup with Server Distinct Values)
+      if (filterable) {
+        const filterBtns = container.querySelectorAll('.col-filter-btn');
+        filterBtns.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const col = (btn as HTMLElement).dataset.column;
+            if (!col) return;
+
+            this.openFilterPopup(container, btn as HTMLElement, col, data, state, fetchServerData, () => {
+              state.currentPage = 1;
+              updateView();
+            });
+          });
+        });
+      }
+
+      // 5. Pagination Controls
+      const firstBtn = container.querySelector('.page-first') as HTMLButtonElement;
+      const prevBtn = container.querySelector('.page-prev') as HTMLButtonElement;
+      const nextBtn = container.querySelector('.page-next') as HTMLButtonElement;
+      const lastBtn = container.querySelector('.page-last') as HTMLButtonElement;
+      const pageSizeSelect = container.querySelector('.page-size-select') as HTMLSelectElement;
+
+      if (firstBtn) {
+        firstBtn.addEventListener('click', () => {
+          state.currentPage = 1;
+          updateView();
+        });
+      }
+      if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+          if (state.currentPage > 1) {
+            state.currentPage--;
+            updateView();
+          }
+        });
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+          state.currentPage++;
+          updateView();
+        });
+      }
+      if (lastBtn) {
+        lastBtn.addEventListener('click', () => {
+          const pageSizeNum = state.pageSize === 'all' ? state.filteredRows : Number(state.pageSize || 25);
+          state.currentPage = Math.max(1, Math.ceil(state.filteredRows / pageSizeNum));
+          updateView();
+        });
+      }
+      if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', (e) => {
+          const val = (e.target as HTMLSelectElement).value;
+          state.pageSize = val === 'all' ? 'all' : parseInt(val, 10);
+          state.currentPage = 1;
+          updateView();
+        });
+      }
+    };
+
+    // Initial render call
+    updateView();
 
     return container;
   }
 
+  private handleExport(state: any, exportType: 'csv' | 'excel' | 'pdf', title?: string): void {
+    if (state.outputFile) {
+      // Server-side streaming export
+      const formattedFilters: Record<string, any[]> = {};
+      Object.keys(state.columnFilters).forEach(col => {
+        const setVal = state.columnFilters[col];
+        if (setVal && setVal.size > 0) {
+          formattedFilters[col] = Array.from(setVal);
+        }
+      });
+
+      const params = new URLSearchParams();
+      params.set('output_file', state.outputFile);
+      params.set('format', exportType);
+      if (state.sortColumn) params.set('sort_column', state.sortColumn);
+      if (state.sortDirection) params.set('sort_direction', state.sortDirection);
+      if (state.globalSearch) params.set('global_search', state.globalSearch);
+      if (Object.keys(formattedFilters).length > 0) {
+        params.set('column_filters_json', JSON.stringify(formattedFilters));
+      }
+
+      const exportUrl = `/api/vanna/v2/grid/export?${params.toString()}`;
+      if (exportType === 'pdf') {
+        window.open(exportUrl, '_blank');
+      } else {
+        window.location.href = exportUrl;
+      }
+    } else {
+      // Fallback client-side export
+      if (exportType === 'csv') this.exportToCSV(state.pageData, state.columns);
+      else if (exportType === 'excel') this.exportToExcel(state.pageData, state.columns, title);
+      else if (exportType === 'pdf') this.exportToPDF(state.pageData, state.columns, title);
+    }
+  }
+
+  private async openFilterPopup(
+    container: HTMLElement,
+    targetBtn: HTMLElement,
+    column: string,
+    allData: any[],
+    state: any,
+    fetchServerData: (distinctCol?: string) => Promise<any>,
+    onApply: () => void
+  ): Promise<void> {
+    const existingPopup = container.querySelector('.jetbrains-filter-popup');
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+
+    let uniqueItems: Array<{ rawValue: any; label: string; count: number }> = [];
+
+    if (state.outputFile) {
+      const serverResult = await fetchServerData(column);
+      if (serverResult && serverResult.distinct_values && serverResult.distinct_values.length > 0) {
+        uniqueItems = serverResult.distinct_values;
+      }
+    }
+
+    if (uniqueItems.length === 0) {
+      const countsMap = new Map<any, { rawValue: any; label: string; count: number }>();
+      allData.forEach(row => {
+        const val = row[column];
+        const key = val === null || val === undefined ? '__NULL__' : String(val);
+        const label = val === null || val === undefined ? '(NULL)' : String(val);
+        if (!countsMap.has(key)) {
+          countsMap.set(key, { rawValue: val, label, count: 0 });
+        }
+        countsMap.get(key)!.count++;
+      });
+      uniqueItems = Array.from(countsMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    const activeSet = state.columnFilters[column];
+    const tempSelected = new Set<any>();
+    if (activeSet && activeSet.size > 0) {
+      activeSet.forEach((v: any) => tempSelected.add(v));
+    } else {
+      uniqueItems.forEach(item => tempSelected.add(item.rawValue));
+    }
+
+    const popup = document.createElement('div');
+    popup.className = 'jetbrains-filter-popup';
+
+    const btnRect = targetBtn.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const top = btnRect.bottom - containerRect.top + container.scrollTop + 4;
+    const left = Math.min(
+      btnRect.left - containerRect.left + container.scrollLeft,
+      containerRect.width - 280
+    );
+
+    popup.style.top = `${top}px`;
+    popup.style.left = `${Math.max(8, left)}px`;
+
+    let popupSearch = '';
+    let filterDebounceTimer: any = null;
+
+    const renderPopupContent = () => {
+      const filteredItems = uniqueItems.filter(item =>
+        item.label.toLowerCase().includes(popupSearch.toLowerCase())
+      );
+
+      const MAX_POPUP_ITEMS = 200;
+      const displayedItems = filteredItems.slice(0, MAX_POPUP_ITEMS);
+      const isTruncated = filteredItems.length > MAX_POPUP_ITEMS;
+
+      popup.innerHTML = `
+        <div class="jetbrains-filter-header">Filter: ${this.escapeHtml(column)}</div>
+        <input type="text" class="jetbrains-filter-search" placeholder="Search values..." value="${this.escapeHtml(popupSearch)}">
+        <div class="jetbrains-filter-actions-row">
+          <span class="select-all-btn">Select All</span>
+          <span class="clear-all-btn">Clear All</span>
+        </div>
+        ${isTruncated ? `<div style="font-size: 10px; color: #57606a; padding: 2px 4px; border-bottom: 1px solid #f0f0f0; background: #f6f8fa;">Showing top ${MAX_POPUP_ITEMS} of ${filteredItems.length} items.</div>` : ''}
+        <div class="jetbrains-filter-list">
+          ${displayedItems.length > 0 ? displayedItems.map((item) => {
+        const isChecked = tempSelected.has(item.rawValue);
+        return `
+              <label class="jetbrains-filter-item">
+                <input type="checkbox" class="filter-item-checkbox" data-key="${this.escapeHtml(String(item.rawValue))}" ${isChecked ? 'checked' : ''}>
+                <span class="filter-val-text">${this.escapeHtml(item.label)}</span>
+                <span class="jetbrains-filter-count">${item.count}</span>
+              </label>
+            `;
+      }).join('') : '<div style="font-size: 11px; color: #8c959f; padding: 4px;">No values match</div>'}
+        </div>
+        <div class="jetbrains-filter-footer">
+          <button class="filter-btn-clear" style="padding: 4px 8px; font-size: 11px; border: 1px solid #d0d7de; background: #f6f8fa; border-radius: 4px; cursor: pointer;">Clear</button>
+          <button class="filter-btn-cancel" style="padding: 4px 8px; font-size: 11px; border: 1px solid #d0d7de; background: #f6f8fa; border-radius: 4px; cursor: pointer;">Cancel</button>
+          <button class="filter-btn-apply" style="padding: 4px 10px; font-size: 11px; border: 1px solid #0969da; background: #0969da; color: #fff; border-radius: 4px; cursor: pointer; font-weight: 600;">OK</button>
+        </div>
+      `;
+
+      const searchInput = popup.querySelector('.jetbrains-filter-search') as HTMLInputElement;
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.selectionStart = searchInput.selectionEnd = searchInput.value.length;
+
+        searchInput.addEventListener('input', (e) => {
+          const query = (e.target as HTMLInputElement).value;
+          if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+          filterDebounceTimer = setTimeout(() => {
+            popupSearch = query;
+            renderPopupContent();
+          }, 200);
+        });
+      }
+
+      const selectAllBtn = popup.querySelector('.select-all-btn');
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+          filteredItems.forEach(item => tempSelected.add(item.rawValue));
+          renderPopupContent();
+        });
+      }
+
+      const clearAllBtn = popup.querySelector('.clear-all-btn');
+      if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', () => {
+          filteredItems.forEach(item => tempSelected.delete(item.rawValue));
+          renderPopupContent();
+        });
+      }
+
+      const checkboxes = popup.querySelectorAll('.filter-item-checkbox');
+      checkboxes.forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          const target = e.target as HTMLInputElement;
+          const key = target.dataset.key;
+          const found = uniqueItems.find(i => String(i.rawValue) === key);
+          if (found) {
+            if (target.checked) {
+              tempSelected.add(found.rawValue);
+            } else {
+              tempSelected.delete(found.rawValue);
+            }
+          }
+        });
+      });
+
+      const btnClear = popup.querySelector('.filter-btn-clear');
+      if (btnClear) {
+        btnClear.addEventListener('click', () => {
+          delete state.columnFilters[column];
+          popup.remove();
+          onApply();
+        });
+      }
+
+      const btnCancel = popup.querySelector('.filter-btn-cancel');
+      if (btnCancel) {
+        btnCancel.addEventListener('click', () => {
+          popup.remove();
+        });
+      }
+
+      const btnApply = popup.querySelector('.filter-btn-apply');
+      if (btnApply) {
+        btnApply.addEventListener('click', () => {
+          if (tempSelected.size === uniqueItems.length) {
+            delete state.columnFilters[column];
+          } else {
+            state.columnFilters[column] = new Set(tempSelected);
+          }
+          popup.remove();
+          onApply();
+        });
+      }
+    };
+
+    renderPopupContent();
+    container.appendChild(popup);
+
+    const onClickOutside = (e: MouseEvent) => {
+      if (!popup.contains(e.target as Node) && !targetBtn.contains(e.target as Node)) {
+        popup.remove();
+        document.removeEventListener('click', onClickOutside);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('click', onClickOutside);
+    }, 10);
+  }
+
   private formatCellValue(value: any, columnType: string): string {
     if (value === null || value === undefined) {
-      return '<em class="null-value">NULL</em>';
+      return '<em class="null-value" style="color: #8c959f; font-style: italic;">NULL</em>';
     }
 
     switch (columnType) {
@@ -641,111 +1428,6 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
     return div.innerHTML;
   }
 
-  private attachEventListeners(container: HTMLElement, data: any[], columns: string[]): void {
-    // Search functionality
-    const searchInput = container.querySelector('.search-input') as HTMLInputElement;
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        const searchTerm = (e.target as HTMLInputElement).value.toLowerCase();
-        this.filterTable(container, data, columns, searchTerm);
-      });
-    }
-
-    // Export functionality
-    const exportBtn = container.querySelector('.export-btn') as HTMLButtonElement;
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        this.exportToCSV(data, columns);
-      });
-    }
-
-    // Sort functionality
-    const sortableHeaders = container.querySelectorAll('th.sortable');
-    sortableHeaders.forEach(header => {
-      header.addEventListener('click', (e) => {
-        const column = (e.currentTarget as HTMLElement).dataset.column;
-        if (column) {
-          this.sortTable(container, data, columns, column);
-        }
-      });
-    });
-  }
-
-  private filterTable(container: HTMLElement, data: any[], columns: string[], searchTerm: string): void {
-    const tbody = container.querySelector('tbody');
-    if (!tbody) return;
-
-    const filteredData = data.filter(row => {
-      return columns.some(col => {
-        const value = String(row[col] || '').toLowerCase();
-        return value.includes(searchTerm);
-      });
-    });
-
-    tbody.innerHTML = filteredData.map(row => `
-      <tr>
-        ${columns.map(col => {
-          const value = row[col];
-          const formattedValue = this.formatCellValue(value, 'string');
-          return `<td>${formattedValue}</td>`;
-        }).join('')}
-      </tr>
-    `).join('');
-  }
-
-  private sortTable(container: HTMLElement, data: any[], columns: string[], column: string): void {
-    const tbody = container.querySelector('tbody');
-    const header = container.querySelector(`th[data-column="${column}"]`) as HTMLElement;
-    if (!tbody || !header) return;
-
-    // Determine sort direction
-    const currentSort = header.dataset.sortDirection || 'none';
-    const newSort = currentSort === 'asc' ? 'desc' : 'asc';
-
-    // Clear all sort indicators
-    container.querySelectorAll('th[data-sort-direction]').forEach(h => {
-      (h as HTMLElement).removeAttribute('data-sort-direction');
-      const indicator = h.querySelector('.sort-indicator');
-      if (indicator) indicator.textContent = '';
-    });
-
-    // Set new sort direction
-    header.dataset.sortDirection = newSort;
-    const indicator = header.querySelector('.sort-indicator');
-    if (indicator) {
-      indicator.textContent = newSort === 'asc' ? '↑' : '↓';
-    }
-
-    // Sort data
-    const sortedData = [...data].sort((a, b) => {
-      const aVal = a[column];
-      const bVal = b[column];
-
-      if (aVal === null || aVal === undefined) return 1;
-      if (bVal === null || bVal === undefined) return -1;
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return newSort === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-
-      const aStr = String(aVal).toLowerCase();
-      const bStr = String(bVal).toLowerCase();
-      const comparison = aStr.localeCompare(bStr);
-      return newSort === 'asc' ? comparison : -comparison;
-    });
-
-    // Update table
-    tbody.innerHTML = sortedData.map(row => `
-      <tr>
-        ${columns.map(col => {
-          const value = row[col];
-          const formattedValue = this.formatCellValue(value, 'string');
-          return `<td>${formattedValue}</td>`;
-        }).join('')}
-      </tr>
-    `).join('');
-  }
-
   private exportToCSV(data: any[], columns: string[]): void {
     const csvContent = [
       columns.join(','),
@@ -753,7 +1435,6 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         columns.map(col => {
           const value = row[col];
           const strValue = value === null || value === undefined ? '' : String(value);
-          // Escape quotes and wrap in quotes if contains comma, quote, or newline
           if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
             return `"${strValue.replace(/"/g, '""')}"`;
           }
@@ -766,11 +1447,98 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', 'data.csv');
+    link.setAttribute('download', 'dataframe_export.csv');
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  private exportToExcel(data: any[], columns: string[], title?: string): void {
+    const tableHTML = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Data</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <style>
+          table { border-collapse: collapse; width: 100%; font-family: sans-serif; font-size: 12px; }
+          th { background-color: #f2f4f7; font-weight: bold; border: 1px solid #d0d7de; padding: 6px 10px; }
+          td { border: 1px solid #d0d7de; padding: 6px 10px; }
+        </style>
+      </head>
+      <body>
+        <h3>${this.escapeHtml(title || 'Data Export')}</h3>
+        <table>
+          <thead>
+            <tr>${columns.map(c => `<th>${this.escapeHtml(c)}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${data.map(row => `
+              <tr>${columns.map(c => `<td>${this.escapeHtml(row[c] ?? '')}</td>`).join('')}</tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'dataframe_export.xlsx');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  private exportToPDF(data: any[], columns: string[], title?: string): void {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${this.escapeHtml(title || 'DataFrame Export')}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; color: #24292f; }
+            h2 { margin: 0 0 6px 0; font-size: 18px; }
+            p { margin: 0 0 16px 0; font-size: 12px; color: #57606a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+            th, td { border: 1px solid #d0d7de; padding: 6px 10px; text-align: left; }
+            th { background-color: #f6f8fa; font-weight: 600; }
+            tr:nth-child(even) { background-color: #fcfcfc; }
+          </style>
+        </head>
+        <body>
+          <h2>${this.escapeHtml(title || 'DataFrame Export')}</h2>
+          <p>Exported ${data.length} rows on ${new Date().toLocaleString()}</p>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                ${columns.map(c => `<th>${this.escapeHtml(c)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map((row, idx) => `
+                <tr>
+                  <td style="text-align: center; color: #8c959f;">${idx + 1}</td>
+                  ${columns.map(c => `<td>${this.escapeHtml(row[c] ?? '')}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   }
 }
 
@@ -1271,14 +2039,14 @@ export class ButtonGroupComponentRenderer extends BaseComponentRenderer {
 
   private applyButtonGroupClickState(container: HTMLElement, clickedIndex: number): void {
     const buttons = container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
-    
+
     buttons.forEach((button, index) => {
       // Disable all buttons
       button.disabled = true;
-      
+
       // Add transition class for animation
       button.classList.add('button-transitioning');
-      
+
       if (index === clickedIndex) {
         // Highlight the clicked button
         button.classList.add('button-clicked', 'button-highlighted');
@@ -1291,18 +2059,18 @@ export class ButtonGroupComponentRenderer extends BaseComponentRenderer {
 
   private restoreButtonGroupState(container: HTMLElement): void {
     const buttons = container.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
-    
+
     buttons.forEach((button) => {
       // Re-enable buttons (unless they were originally disabled)
       const originallyDisabled = button.dataset.originallyDisabled === 'true';
       if (!originallyDisabled) {
         button.disabled = false;
       }
-      
+
       // Remove all state classes
       button.classList.remove(
-        'button-clicked', 
-        'button-highlighted', 
+        'button-clicked',
+        'button-highlighted',
         'button-grayed-out',
         'button-transitioning'
       );
@@ -1317,16 +2085,22 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
     container.className = 'rich-component rich-chart';
     container.dataset.componentId = component.id;
 
-    // The ChartComponent.data field contains the Plotly figure directly
-    // Structure: component.data = { data: [...traces...], layout: {...}, title: "...", config: {...} }
-    const { data: plotlyData, layout, title, config = {} } = component.data;
+    const dataObj = component.data || {};
+    let plotlyData = dataObj.data;
+    let layout = dataObj.layout || {};
+    const title = (component as any).title || dataObj.title || '';
+    const config = (component as any).config || dataObj.config || {};
 
-    console.log('ChartComponentRenderer: Received component.data:', component.data);
+    if (!plotlyData && Array.isArray(dataObj)) {
+      plotlyData = dataObj;
+    }
+
+    console.log('ChartComponentRenderer: Received component:', component);
     console.log('ChartComponentRenderer: plotlyData:', plotlyData);
     console.log('ChartComponentRenderer: layout:', layout);
 
     // Check if we have a valid Plotly figure structure
-    if (plotlyData && Array.isArray(plotlyData) && layout) {
+    if (plotlyData && Array.isArray(plotlyData)) {
       // Create plotly-chart web component
       const chartElement = document.createElement('plotly-chart') as any;
 
@@ -1357,8 +2131,6 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
         chartElement.config = config;
 
         console.log('ChartComponentRenderer: Set properties after DOM attachment');
-        console.log('ChartComponentRenderer: chartElement.data:', chartElement.data);
-        console.log('ChartComponentRenderer: chartElement.layout:', chartElement.layout);
       });
     } else {
       // Fallback for invalid chart data
@@ -1662,15 +2434,21 @@ export class ArtifactComponentRenderer extends BaseComponentRenderer {
 export class UserMessageComponentRenderer extends BaseComponentRenderer {
   render(component: RichComponent): HTMLElement {
     const messageEl = document.createElement('vanna-message');
-    messageEl.setAttribute('theme', 'light'); // Could be made dynamic
+    messageEl.setAttribute('theme', 'light');
     messageEl.dataset.componentId = component.id;
-    
-    // Set properties for vanna-message
+
     (messageEl as any).content = component.data.content || '';
     (messageEl as any).type = 'user';
-    (messageEl as any).timestamp = Date.parse(component.timestamp);
-    
+    (messageEl as any).timestamp = Date.parse(component.timestamp) || Date.now();
+
     return messageEl;
+  }
+
+  update(element: HTMLElement, component: RichComponent, updates?: Record<string, any>): void {
+    const content = updates?.content ?? component.data?.content;
+    if (content !== undefined) {
+      (element as any).content = content;
+    }
   }
 }
 
@@ -1678,15 +2456,21 @@ export class UserMessageComponentRenderer extends BaseComponentRenderer {
 export class AssistantMessageComponentRenderer extends BaseComponentRenderer {
   render(component: RichComponent): HTMLElement {
     const messageEl = document.createElement('vanna-message');
-    messageEl.setAttribute('theme', 'light'); // Could be made dynamic
+    messageEl.setAttribute('theme', 'light');
     messageEl.dataset.componentId = component.id;
-    
-    // Set properties for vanna-message
+
     (messageEl as any).content = component.data.content || '';
     (messageEl as any).type = 'assistant';
-    (messageEl as any).timestamp = Date.parse(component.timestamp);
-    
+    (messageEl as any).timestamp = Date.parse(component.timestamp) || Date.now();
+
     return messageEl;
+  }
+
+  update(element: HTMLElement, component: RichComponent, updates?: Record<string, any>): void {
+    const content = updates?.content ?? component.data?.content;
+    if (content !== undefined) {
+      (element as any).content = content;
+    }
   }
 }
 
@@ -1815,6 +2599,9 @@ export class ComponentManager {
   private elements: Map<string, HTMLElement> = new Map();
   private registry: ComponentRegistry = new ComponentRegistry();
   private container: HTMLElement;
+  private currentTurnDevInfoContainer: HTMLElement | null = null;
+  private currentTurnDevInfoContent: HTMLElement | null = null;
+
   private readonly sharedFields = new Set([
     'id',
     'type',
@@ -1855,6 +2642,57 @@ export class ComponentManager {
     }
   }
 
+  private isTechnicalComponent(component: RichComponent): boolean {
+    // Only tool execution status cards (Executing run_sql) and raw log viewers are encapsulated in Developer Info
+    return component.type === 'status_card' || component.type === 'log_viewer';
+  }
+
+  private getOrCreateDevInfoContainer(): { wrapper: HTMLElement; content: HTMLElement } {
+    if (!this.currentTurnDevInfoContainer || !this.currentTurnDevInfoContent) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'dev-info-container';
+
+      const btn = document.createElement('button');
+      btn.className = 'dev-info-toggle-btn';
+      btn.type = 'button';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.innerHTML = `
+        <span class="dev-info-icon">🛠️</span>
+        <span class="dev-info-title">Developer Info</span>
+        <span class="dev-info-badge">SQL & Execution Logs</span>
+        <span class="dev-info-chevron">▼</span>
+      `;
+
+      const content = document.createElement('div');
+      content.className = 'dev-info-content collapsed';
+
+      btn.addEventListener('click', () => {
+        const isCollapsed = content.classList.contains('collapsed');
+        if (isCollapsed) {
+          content.classList.remove('collapsed');
+          btn.setAttribute('aria-expanded', 'true');
+          btn.classList.add('expanded');
+        } else {
+          content.classList.add('collapsed');
+          btn.setAttribute('aria-expanded', 'false');
+          btn.classList.remove('expanded');
+        }
+      });
+
+      wrapper.appendChild(btn);
+      wrapper.appendChild(content);
+
+      this.currentTurnDevInfoContainer = wrapper;
+      this.currentTurnDevInfoContent = content;
+
+      this.container.appendChild(wrapper);
+    }
+    return {
+      wrapper: this.currentTurnDevInfoContainer,
+      content: this.currentTurnDevInfoContent
+    };
+  }
+
   private createComponent(update: ComponentUpdate): void {
     if (!update.component) return;
 
@@ -1864,7 +2702,7 @@ export class ComponentManager {
     this.elements.set(component.id, element);
 
     // Determine where to place the component
-    this.positionComponent(element);
+    this.positionComponent(component, element);
   }
 
   private updateComponent(update: ComponentUpdate): void {
@@ -1907,9 +2745,26 @@ export class ComponentManager {
     }
   }
 
-  private positionComponent(element: HTMLElement): void {
-    // Always append to container
-    this.container.appendChild(element);
+  private positionComponent(component: RichComponent, element: HTMLElement): void {
+    if (component.type === 'user-message') {
+      // Start of a new turn
+      this.currentTurnDevInfoContainer = null;
+      this.currentTurnDevInfoContent = null;
+      this.container.appendChild(element);
+    } else if (this.isTechnicalComponent(component)) {
+      // Put technical component into Developer Info container
+      const { content, wrapper } = this.getOrCreateDevInfoContainer();
+      content.appendChild(element);
+      // Ensure wrapper stays at the bottom of the turn
+      this.container.appendChild(wrapper);
+    } else {
+      // Primary user-facing component (assistant-message, chart, artifact, final answer)
+      if (this.currentTurnDevInfoContainer && this.container.contains(this.currentTurnDevInfoContainer)) {
+        this.container.insertBefore(element, this.currentTurnDevInfoContainer);
+      } else {
+        this.container.appendChild(element);
+      }
+    }
 
     // Trigger scroll to bottom in parent chat component
     this.triggerScroll();
@@ -1931,6 +2786,8 @@ export class ComponentManager {
   clear(): void {
     this.components.clear();
     this.elements.clear();
+    this.currentTurnDevInfoContainer = null;
+    this.currentTurnDevInfoContent = null;
     this.container.innerHTML = '';
     ensureRichComponentStyles(this.container);
   }
@@ -1963,8 +2820,8 @@ export class ComponentManager {
 
   private isUIStateUpdate(component: RichComponent): boolean {
     return component.type === 'status_bar_update' ||
-           component.type === 'task_tracker_update' ||
-           component.type === 'chat_input_update';
+      component.type === 'task_tracker_update' ||
+      component.type === 'chat_input_update';
   }
 
   private processUIStateUpdate(component: RichComponent): void {
@@ -2000,10 +2857,22 @@ export class ComponentManager {
 
     if (statusBar) {
       const { status, message, detail } = component.data || {};
-      // Set properties directly on the Lit component
-      (statusBar as any).status = status;
-      (statusBar as any).message = message || '';
-      (statusBar as any).detail = detail || '';
+
+      // Keep vannaChat status updated
+      if (vannaChat) {
+        vannaChat.status = status;
+      }
+
+      // Hide status bar when status is idle or response is complete
+      if (status === 'idle' || message === 'Response complete' || message === 'Ready') {
+        (statusBar as any).status = 'idle';
+        (statusBar as any).message = '';
+        (statusBar as any).detail = '';
+      } else {
+        (statusBar as any).status = status;
+        (statusBar as any).message = message || '';
+        (statusBar as any).detail = detail || '';
+      }
     }
   }
 

@@ -14,7 +14,9 @@ class DataFrameComponent(RichComponent):
     title: Optional[str] = None
     description: Optional[str] = None
     row_count: int = 0
+    total_rows: Optional[int] = None
     column_count: int = 0
+    output_file: Optional[str] = None
 
     # Display options
     max_rows_displayed: int = 100  # Limit rows shown in UI

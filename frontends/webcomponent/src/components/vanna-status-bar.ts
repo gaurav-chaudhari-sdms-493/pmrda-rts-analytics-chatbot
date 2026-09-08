@@ -9,19 +9,16 @@ export class VannaStatusBar extends LitElement {
     css`
       :host {
         display: block;
-        background: rgba(254, 93, 38, 0.1);
-        border: 2px solid var(--vanna-orange);
-        border-radius: var(--vanna-border-radius-xl);
-        padding: var(--vanna-space-4) var(--vanna-space-5);
-        margin-bottom: var(--vanna-space-4);
+        background: #ffffff;
+        border: 1px solid #e5e5e5;
+        border-radius: 20px;
+        padding: 8px 16px;
+        margin-bottom: 8px;
         font-family: var(--vanna-font-family-default);
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
-        color: var(--vanna-navy);
-        backdrop-filter: blur(12px);
-        box-shadow:
-          var(--vanna-shadow-lg),
-          0 0 0 1px rgba(254, 93, 38, 0.1);
+        color: #0d0d0d;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
         
         /* Animation properties */
         opacity: 1;
@@ -33,8 +30,7 @@ export class VannaStatusBar extends LitElement {
           transform var(--vanna-duration-300) cubic-bezier(0.4, 0, 0.2, 1),
           max-height var(--vanna-duration-300) ease,
           margin var(--vanna-duration-300) ease,
-          padding var(--vanna-duration-300) ease,
-          box-shadow var(--vanna-duration-200) ease;
+          padding var(--vanna-duration-300) ease;
       }
 
       /* Hide when there's no actual content */
@@ -44,6 +40,7 @@ export class VannaStatusBar extends LitElement {
         max-height: 0;
         margin: 0;
         padding: 0;
+        border: none;
         pointer-events: none;
       }
 
@@ -51,104 +48,10 @@ export class VannaStatusBar extends LitElement {
         display: none;
       }
 
-      /* Entrance animation when content appears */
-      :host(.entering) {
-        animation: statusEnter var(--vanna-duration-300) ease-out;
-      }
-
-      /* Exit animation when content disappears */
-      :host(.exiting) {
-        animation: statusExit var(--vanna-duration-300) ease-in;
-      }
-
-      @keyframes statusEnter {
-        0% {
-          opacity: 0;
-          transform: translateY(-12px) scale(0.9);
-          max-height: 0;
-        }
-        50% {
-          opacity: 0.8;
-          transform: translateY(-2px) scale(1.02);
-        }
-        100% {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-          max-height: 200px;
-        }
-      }
-
-      @keyframes statusExit {
-        0% {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-          max-height: 200px;
-        }
-        50% {
-          opacity: 0.5;
-          transform: translateY(-4px) scale(0.98);
-        }
-        100% {
-          opacity: 0;
-          transform: translateY(-12px) scale(0.9);
-          max-height: 0;
-        }
-      }
-
-      :host([status="working"]) {
-        background: var(--vanna-orange);
-        border-color: var(--vanna-orange);
-        color: white;
-        box-shadow:
-          var(--vanna-shadow-xl),
-          0 0 0 2px rgba(254, 93, 38, 0.3),
-          0 0 20px rgba(254, 93, 38, 0.4);
-      }
-
-      :host([status="error"]) {
-        background: linear-gradient(135deg, var(--vanna-accent-negative-subtle) 0%, rgba(239, 68, 68, 0.15) 100%);
-        border-color: var(--vanna-accent-negative-default);
-        color: var(--vanna-accent-negative-stronger);
-        box-shadow: 
-          var(--vanna-shadow-xl),
-          0 0 0 2px rgba(239, 68, 68, 0.3),
-          0 0 20px rgba(239, 68, 68, 0.2);
-        animation: errorShake 0.5s ease-in-out, errorGlow 2s ease-in-out;
-      }
-
-      :host([status="success"]) {
-        background: linear-gradient(135deg, var(--vanna-accent-positive-subtle) 0%, rgba(16, 185, 129, 0.15) 100%);
-        border-color: var(--vanna-accent-positive-default);
-        color: var(--vanna-accent-positive-stronger);
-        box-shadow: 
-          var(--vanna-shadow-xl),
-          0 0 0 2px rgba(16, 185, 129, 0.3),
-          0 0 20px rgba(16, 185, 129, 0.2);
-        animation: successPulse 0.6s ease-out, successGlow 2s ease-out;
-      }
-
-      @keyframes errorShake {
-        0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-        20%, 40%, 60%, 80% { transform: translateX(4px); }
-      }
-
-      @keyframes successPulse {
-        0% { 
-          transform: scale(1); 
-        }
-        50% { 
-          transform: scale(1.05); 
-        }
-        100% { 
-          transform: scale(1); 
-        }
-      }
-
       .status-content {
         display: flex;
         align-items: center;
-        gap: var(--vanna-space-3);
+        gap: 12px;
         animation: contentFadeIn var(--vanna-duration-200) ease-out;
       }
 
@@ -163,175 +66,175 @@ export class VannaStatusBar extends LitElement {
         }
       }
 
-      .status-indicator {
-        width: 12px;
-        height: 12px;
-        border-radius: var(--vanna-border-radius-full);
-        background: var(--vanna-accent-primary-default);
+      /* Chatbot Avatar & Head Animations */
+      .chatbot-avatar {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         flex-shrink: 0;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5), 0 2px 8px rgba(0, 0, 0, 0.15);
       }
 
-      .status-indicator.working {
-        background: white;
-        animation: workingPulse 1.5s ease-in-out infinite;
+      .chatbot-head {
+        position: relative;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #10a37f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(16, 163, 127, 0.25);
+        transition: transform 0.2s ease, background-color 0.2s ease;
       }
 
-      .status-indicator.error {
-        background: linear-gradient(45deg, var(--vanna-accent-negative-default), var(--vanna-accent-negative-stronger));
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5), 0 0 8px rgba(239, 68, 68, 0.4);
+      :host([status="working"]) .chatbot-head {
+        animation: headBob 1.5s ease-in-out infinite;
       }
 
-      .status-indicator.success {
-        background: linear-gradient(45deg, var(--vanna-accent-positive-default), var(--vanna-accent-positive-stronger));
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5), 0 0 8px rgba(16, 185, 129, 0.4);
+      @keyframes headBob {
+        0%, 100% {
+          transform: translateY(0) scale(1);
+        }
+        50% {
+          transform: translateY(-3px) scale(1.05);
+        }
       }
 
-      .spinner {
+      /* Thinking Animation on Top of Head */
+      .thinking-head-animation {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        pointer-events: none;
+      }
+
+      .thinking-dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: #10a37f;
+        box-shadow: 0 0 6px rgba(16, 163, 127, 0.6);
+        animation: dotBounce 1.2s ease-in-out infinite;
+      }
+
+      .thinking-dot.d1 {
+        animation-delay: 0s;
+      }
+
+      .thinking-dot.d2 {
+        animation-delay: 0.2s;
+      }
+
+      .thinking-dot.d3 {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes dotBounce {
+        0%, 80%, 100% {
+          transform: translateY(0) scale(0.8);
+          opacity: 0.4;
+        }
+        40% {
+          transform: translateY(-6px) scale(1.3);
+          opacity: 1;
+        }
+      }
+
+      .head-glow-ring {
+        position: absolute;
+        top: -4px;
+        width: 24px;
+        height: 8px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(16, 163, 127, 0.5);
+        animation: ringPulse 1.5s infinite ease-out;
+      }
+
+      @keyframes ringPulse {
+        0% {
+          transform: scale(0.6);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+      }
+
+      /* Success Icon Badge on Head */
+      .success-head-badge {
+        position: absolute;
+        top: -3px;
+        right: -3px;
         width: 16px;
         height: 16px;
-        border: 3px solid rgba(21, 168, 168, 0.3);
-        border-top-color: var(--vanna-teal);
-        border-radius: var(--vanna-border-radius-full);
-        animation: spin 1s linear infinite, spinnerGlow 2s ease-in-out infinite;
-        flex-shrink: 0;
+        border-radius: 50%;
+        background: #10b981;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+        animation: badgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      /* Error Icon Badge on Head */
+      .error-head-badge {
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #ef4444;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+        animation: badgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+
+      @keyframes badgePop {
+        0% {
+          transform: scale(0);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .status-text-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
       }
 
       .status-text {
-        flex: 1;
+        font-size: 13px;
         font-weight: 600;
+        color: #0d0d0d;
         line-height: 1.4;
-        letter-spacing: 0.01em;
       }
 
       .status-detail {
         font-size: 12px;
-        color: var(--vanna-foreground-dimmest);
-        margin-left: var(--vanna-space-4);
-        opacity: 0.9;
-        font-weight: 500;
-      }
-
-      .status-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--vanna-space-2);
-        margin-left: auto;
-      }
-
-      .status-button {
-        padding: var(--vanna-space-1) var(--vanna-space-2);
-        border: 1px solid var(--vanna-outline-default);
-        border-radius: var(--vanna-border-radius-sm);
-        background: var(--vanna-background-subtle);
-        color: var(--vanna-foreground-dimmer);
-        font-size: 11px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all var(--vanna-duration-150) ease;
-      }
-
-      .status-button:hover {
-        background: var(--vanna-background-higher);
-        border-color: var(--vanna-outline-hover);
-        color: var(--vanna-foreground-default);
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-          transform: scale(1);
-        }
-        50% {
-          opacity: 0.6;
-          transform: scale(1.1);
-        }
-      }
-
-      @keyframes workingPulse {
-        0%, 100% {
-          opacity: 1;
-          transform: scale(1);
-          box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 2px 8px rgba(255, 255, 255, 0.3);
-        }
-        50% {
-          opacity: 0.9;
-          transform: scale(1.2);
-          box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9), 0 4px 12px rgba(255, 255, 255, 0.5);
-        }
-      }
-
-      @keyframes spinnerGlow {
-        0%, 100% {
-          filter: drop-shadow(0 0 2px rgba(21, 168, 168, 0.5));
-        }
-        50% {
-          filter: drop-shadow(0 0 6px rgba(21, 168, 168, 0.8));
-        }
-      }
-
-      @keyframes errorGlow {
-        0% {
-          box-shadow: 
-            var(--vanna-shadow-xl),
-            0 0 0 2px rgba(239, 68, 68, 0.3),
-            0 0 20px rgba(239, 68, 68, 0.2);
-        }
-        50% {
-          box-shadow: 
-            var(--vanna-shadow-2xl),
-            0 0 0 3px rgba(239, 68, 68, 0.4),
-            0 0 30px rgba(239, 68, 68, 0.3);
-        }
-        100% {
-          box-shadow: 
-            var(--vanna-shadow-xl),
-            0 0 0 2px rgba(239, 68, 68, 0.3),
-            0 0 20px rgba(239, 68, 68, 0.2);
-        }
-      }
-
-      @keyframes successGlow {
-        0% {
-          box-shadow: 
-            var(--vanna-shadow-xl),
-            0 0 0 2px rgba(16, 185, 129, 0.3),
-            0 0 20px rgba(16, 185, 129, 0.2);
-        }
-        50% {
-          box-shadow: 
-            var(--vanna-shadow-2xl),
-            0 0 0 3px rgba(16, 185, 129, 0.4),
-            0 0 30px rgba(16, 185, 129, 0.3);
-        }
-        100% {
-          box-shadow: 
-            var(--vanna-shadow-xl),
-            0 0 0 2px rgba(16, 185, 129, 0.3),
-            0 0 20px rgba(16, 185, 129, 0.2);
-        }
-      }
-
-      /* Dark theme overrides */
-      :host([theme="dark"]) {
-        background: var(--vanna-background-higher);
-        border-color: var(--vanna-outline-default);
-      }
-
-      :host([theme="dark"]) .status-button {
-        background: var(--vanna-background-highest);
-        border-color: var(--vanna-outline-default);
-      }
-
-      :host([theme="dark"]) .status-button:hover {
-        background: var(--vanna-background-highest);
-        border-color: var(--vanna-outline-hover);
+        color: #676767;
+        font-weight: 400;
       }
     `
   ];
@@ -348,8 +251,6 @@ export class VannaStatusBar extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-
-    // Clean up pending animation timeouts when component is removed
     if (this._enterTimeout !== null) {
       clearTimeout(this._enterTimeout);
       this._enterTimeout = null;
@@ -361,10 +262,8 @@ export class VannaStatusBar extends LitElement {
   }
 
   updated(_changedProperties: Map<string | number | symbol, unknown>) {
-    // Update CSS class based on content
     const hasContent = Boolean(this.message && this.message.trim());
 
-    // Cancel any pending animation timeouts to prevent race conditions
     if (this._enterTimeout !== null) {
       clearTimeout(this._enterTimeout);
       this._enterTimeout = null;
@@ -374,48 +273,36 @@ export class VannaStatusBar extends LitElement {
       this._exitTimeout = null;
     }
 
-    // Debounce rapid updates to prevent animation jank
     const now = Date.now();
     const timeSinceLastUpdate = now - this._lastUpdateTime;
-    const shouldDebounce = timeSinceLastUpdate < 100; // 100ms debounce
+    const shouldDebounce = timeSinceLastUpdate < 100;
 
-    // Handle animation classes
     if (hasContent !== this._previousHasContent) {
       if (hasContent) {
-        // Content appeared - animate in
         this.classList.remove('no-content', 'exiting');
 
         if (!shouldDebounce) {
-          // Only animate if not rapid-firing
           this.classList.add('entering');
-
-          // Remove entering class after animation
           this._enterTimeout = window.setTimeout(() => {
             this.classList.remove('entering');
             this._enterTimeout = null;
           }, 300);
         }
       } else {
-        // Content disappeared - animate out
         this.classList.remove('entering');
 
         if (!shouldDebounce) {
-          // Only animate if not rapid-firing
           this.classList.add('exiting');
-
-          // Add no-content class after animation
           this._exitTimeout = window.setTimeout(() => {
             this.classList.remove('exiting');
             this.classList.add('no-content');
             this._exitTimeout = null;
           }, 300);
         } else {
-          // If rapid-firing, skip animation and go straight to no-content
           this.classList.add('no-content');
         }
       }
     } else if (!hasContent) {
-      // Ensure no-content class is applied when no content
       this.classList.add('no-content');
     }
 
@@ -424,19 +311,43 @@ export class VannaStatusBar extends LitElement {
   }
 
   render() {
-    // Only show if there's actual content (message) to display
     if (!this.message || !this.message.trim()) {
       return html``;
     }
 
     return html`
       <div class="status-content">
-        ${this.status === 'working'
-          ? html`<div class="spinner"></div>`
-          : html`<div class="status-indicator ${this.status}"></div>`
-        }
-        <span class="status-text">${this.message}</span>
-        ${this.detail ? html`<span class="status-detail">${this.detail}</span>` : ''}
+        <div class="chatbot-avatar ${this.status}">
+          <div class="chatbot-head">
+            <span class="bot-icon">🤖</span>
+
+            ${this.status === 'working' ? html`
+              <div class="thinking-head-animation">
+                <span class="thinking-dot d1"></span>
+                <span class="thinking-dot d2"></span>
+                <span class="thinking-dot d3"></span>
+                <div class="head-glow-ring"></div>
+              </div>
+            ` : ''}
+
+            ${this.status === 'success' ? html`
+              <div class="success-head-badge" title="Response generated successfully">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+            ` : ''}
+
+            ${this.status === 'error' ? html`
+              <div class="error-head-badge" title="Generation error">!</div>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="status-text-container">
+          <span class="status-text">${this.message}</span>
+          ${this.detail ? html`<span class="status-detail">${this.detail}</span>` : ''}
+        </div>
       </div>
     `;
   }

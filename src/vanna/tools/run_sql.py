@@ -87,6 +87,10 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                     columns = df.columns.tolist()
                     row_count = len(df)
 
+                    # Cap UI payload records to 1,000 for high performance rendering
+                    MAX_UI_ROWS = 1000
+                    ui_records = results_data[:MAX_UI_ROWS]
+
                     # Write DataFrame to CSV file for downstream tools
                     file_id = str(uuid.uuid4())[:8]
                     filename = f"query_results_{file_id}.csv"
@@ -105,11 +109,20 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
 
                     result = f"{results_preview}\n\nResults saved to file: {filename}\n\n**IMPORTANT: FOR VISUALIZE_DATA USE FILENAME: {filename}**"
 
-                    # Create DataFrame component for UI
+                    # Create DataFrame component for UI with capped records and total row count
+                    description_str = (
+                        f"SQL query returned {row_count} total rows with {len(columns)} columns"
+                        if row_count <= MAX_UI_ROWS
+                        else f"SQL query returned {row_count} total rows (showing first {MAX_UI_ROWS} in grid for performance)"
+                    )
+
                     dataframe_component = DataFrameComponent.from_records(
-                        records=cast(List[Dict[str, Any]], results_data),
+                        records=cast(List[Dict[str, Any]], ui_records),
                         title="Query Results",
-                        description=f"SQL query returned {row_count} rows with {len(columns)} columns",
+                        description=description_str,
+                        row_count=len(ui_records),
+                        total_rows=row_count,
+                        output_file=filename,
                     )
 
                     ui_component = UiComponent(

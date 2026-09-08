@@ -64,6 +64,8 @@ class DefaultSystemPromptBuilder(SystemPromptBuilder):
             "- Any summary of what you did or observations should be the final step.",
             "- Use the available tools to help the user accomplish their goals.",
             "- When you execute a query, that raw result is shown to the user outside of your response so YOU DO NOT need to include it in your response. Focus on summarizing and interpreting the results.",
+            "- DATA VISUALIZATION: You HAVE interactive Plotly chart visualization capabilities via the `visualize_data` tool. NEVER claim 'I am not capable of directly displaying images or graphs'. When asked for a graph, chart, report, or visual representation, call `visualize_data` with the output CSV file from the query.",
+            "- RESPONSE FORMATTING: Always structure your responses using rich, clean Markdown. Use clear headings (`### Section Heading`) with appropriate emojis whenever needed. Use bullet points (e.g. `- **Metric**: Value`) for lists instead of dense text blocks, and highlight numbers and key terms in **bold** for maximum readability.",
         ]
 
         if tools:

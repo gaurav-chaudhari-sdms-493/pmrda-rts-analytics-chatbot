@@ -14,6 +14,9 @@ from ..base.templates import get_index_html
 from ...core.user.request_context import RequestContext
 
 
+from .grid import router as grid_router
+
+
 def register_chat_routes(
     app: FastAPI, chat_handler: ChatHandler, config: Optional[Dict[str, Any]] = None
 ) -> None:
@@ -25,6 +28,9 @@ def register_chat_routes(
         config: Server configuration
     """
     config = config or {}
+
+    # Register server-side grid router
+    app.include_router(grid_router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:

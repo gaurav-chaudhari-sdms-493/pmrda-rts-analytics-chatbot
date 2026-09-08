@@ -1,55 +1,55 @@
 import { css } from 'lit';
 
-// Vanna 2.0 design tokens - Data-First Agents branding
+// ChatGPT Light Theme UI Design Tokens
 export const vannaDesignTokens = css`
   :host {
-    /* Vanna 2.0 Brand Colors */
-    --vanna-navy: rgb(2, 61, 96);
-    --vanna-cream: rgb(231, 225, 207);
-    --vanna-teal: rgb(21, 168, 168);
-    --vanna-orange: rgb(254, 93, 38);
-    --vanna-magenta: rgb(191, 19, 99);
+    /* Brand Colors - ChatGPT Light Aesthetic */
+    --vanna-navy: #0d0d0d;
+    --vanna-cream: #ffffff;
+    --vanna-teal: #10a37f;
+    --vanna-orange: #f97316;
+    --vanna-magenta: #ec4899;
 
-    /* Color Palette - Light mode (default) */
-    --vanna-background-root: rgb(255, 255, 255);
-    --vanna-background-default: rgb(231, 225, 207);
-    --vanna-background-higher: rgb(244, 246, 248);
-    --vanna-background-highest: rgb(229, 231, 235);
-    --vanna-background-subtle: rgb(248, 250, 252);
-    --vanna-background-lower: rgb(239, 242, 245);
+    /* Color Palette - ChatGPT Light Mode (Default) */
+    --vanna-background-root: #ffffff;
+    --vanna-background-default: #ffffff;
+    --vanna-background-higher: #f9f9f9;
+    --vanna-background-highest: #f4f4f4;
+    --vanna-background-subtle: #fafafa;
+    --vanna-background-lower: #f0f0f0;
 
-    --vanna-foreground-default: rgb(2, 61, 96);
-    --vanna-foreground-dimmer: rgb(71, 85, 105);
-    --vanna-foreground-dimmest: rgb(100, 116, 139);
+    --vanna-foreground-default: #0d0d0d;
+    --vanna-foreground-dimmer: #676767;
+    --vanna-foreground-dimmest: #8e8e8e;
 
-    --vanna-accent-primary-default: rgb(21, 168, 168);
-    --vanna-accent-primary-stronger: rgb(2, 61, 96);
-    --vanna-accent-primary-strongest: rgb(2, 61, 96);
-    --vanna-accent-primary-subtle: rgba(21, 168, 168, 0.1);
-    --vanna-accent-primary-hover: rgb(21, 168, 168);
+    --vanna-accent-primary-default: #10a37f;
+    --vanna-accent-primary-stronger: #0d8a6a;
+    --vanna-accent-primary-strongest: #0a6b52;
+    --vanna-accent-primary-subtle: rgba(16, 163, 127, 0.1);
+    --vanna-accent-primary-hover: #1abf95;
 
-    --vanna-accent-positive-default: rgb(21, 168, 168);
-    --vanna-accent-positive-stronger: rgb(2, 61, 96);
-    --vanna-accent-positive-subtle: rgba(21, 168, 168, 0.1);
+    --vanna-accent-positive-default: #10a37f;
+    --vanna-accent-positive-stronger: #0d8a6a;
+    --vanna-accent-positive-subtle: rgba(16, 163, 127, 0.1);
 
-    --vanna-accent-negative-default: rgb(239, 68, 68);
-    --vanna-accent-negative-stronger: rgb(220, 38, 38);
+    --vanna-accent-negative-default: #ef4444;
+    --vanna-accent-negative-stronger: #dc2626;
     --vanna-accent-negative-subtle: rgba(239, 68, 68, 0.1);
 
-    --vanna-accent-warning-default: rgb(254, 93, 38);
-    --vanna-accent-warning-stronger: rgb(254, 93, 38);
-    --vanna-accent-warning-subtle: rgba(254, 93, 38, 0.1);
+    --vanna-accent-warning-default: #f97316;
+    --vanna-accent-warning-stronger: #ea580c;
+    --vanna-accent-warning-subtle: rgba(249, 115, 22, 0.1);
 
     /* Outline/Border colors */
-    --vanna-outline-default: rgba(21, 168, 168, 0.3);
-    --vanna-outline-dimmer: rgb(241, 245, 249);
-    --vanna-outline-dimmest: rgb(248, 250, 252);
-    --vanna-outline-hover: rgb(21, 168, 168);
+    --vanna-outline-default: rgba(0, 0, 0, 0.1);
+    --vanna-outline-dimmer: rgba(0, 0, 0, 0.06);
+    --vanna-outline-dimmest: rgba(0, 0, 0, 0.03);
+    --vanna-outline-hover: rgba(0, 0, 0, 0.2);
 
     /* Typography */
-    --vanna-font-family-default: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-    --vanna-font-family-serif: "Roboto Slab", ui-serif, Georgia, serif;
-    --vanna-font-family-mono: "Space Mono", ui-monospace, SFMono-Regular, "SF Mono", Monaco, Inconsolata, "Roboto Mono", "Ubuntu Mono", monospace;
+    --vanna-font-family-default: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --vanna-font-family-serif: Georgia, serif;
+    --vanna-font-family-mono: "Fira Code", "Space Mono", Monaco, Consolas, "Ubuntu Mono", monospace;
 
     /* Spacing scale */
     --vanna-space-0: 0px;
@@ -67,19 +67,19 @@ export const vannaDesignTokens = css`
 
     /* Border radius */
     --vanna-border-radius-sm: 6px;
-    --vanna-border-radius-md: 10px;
-    --vanna-border-radius-lg: 14px;
-    --vanna-border-radius-xl: 20px;
-    --vanna-border-radius-2xl: 24px;
+    --vanna-border-radius-md: 12px;
+    --vanna-border-radius-lg: 16px;
+    --vanna-border-radius-xl: 24px;
+    --vanna-border-radius-2xl: 32px;
     --vanna-border-radius-full: 9999px;
 
-    /* Shadows - Preline-inspired */
+    /* Shadows - Light ChatGPT style */
     --vanna-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --vanna-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-    --vanna-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-    --vanna-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    --vanna-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    --vanna-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --vanna-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+    --vanna-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08);
+    --vanna-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+    --vanna-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+    --vanna-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
 
     /* Animation durations */
     --vanna-duration-75: 75ms;
@@ -101,51 +101,7 @@ export const vannaDesignTokens = css`
     /* Chat-specific tokens */
     --vanna-chat-bubble-radius: 18px;
     --vanna-chat-bubble-radius-sm: 12px;
-    --vanna-chat-spacing: 16px;
-    --vanna-chat-avatar-size: 40px;
-  }
-
-  /* Dark theme overrides */
-  :host([theme="dark"]) {
-    --vanna-background-root: rgb(9, 11, 17);
-    --vanna-background-default: rgb(15, 18, 25);
-    --vanna-background-higher: rgb(24, 29, 39);
-    --vanna-background-highest: rgb(31, 39, 51);
-    --vanna-background-subtle: rgb(17, 21, 28);
-    --vanna-background-lower: rgb(6, 8, 12);
-
-    --vanna-foreground-default: rgb(248, 250, 252);
-    --vanna-foreground-dimmer: rgb(203, 213, 225);
-    --vanna-foreground-dimmest: rgb(148, 163, 184);
-
-    --vanna-accent-primary-default: rgb(21, 168, 168);
-    --vanna-accent-primary-stronger: rgb(21, 168, 168);
-    --vanna-accent-primary-strongest: rgb(2, 61, 96);
-    --vanna-accent-primary-subtle: rgba(21, 168, 168, 0.15);
-    --vanna-accent-primary-hover: rgb(21, 168, 168);
-
-    --vanna-accent-positive-default: rgb(21, 168, 168);
-    --vanna-accent-positive-stronger: rgb(21, 168, 168);
-    --vanna-accent-positive-subtle: rgba(21, 168, 168, 0.15);
-
-    --vanna-accent-negative-default: rgb(248, 113, 113);
-    --vanna-accent-negative-stronger: rgb(239, 68, 68);
-    --vanna-accent-negative-subtle: rgba(248, 113, 113, 0.15);
-
-    --vanna-accent-warning-default: rgb(254, 93, 38);
-    --vanna-accent-warning-stronger: rgb(254, 93, 38);
-    --vanna-accent-warning-subtle: rgba(254, 93, 38, 0.15);
-
-    --vanna-outline-default: rgba(21, 168, 168, 0.3);
-    --vanna-outline-dimmer: rgb(31, 41, 55);
-    --vanna-outline-dimmest: rgb(17, 24, 39);
-    --vanna-outline-hover: rgb(21, 168, 168);
-
-    --vanna-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.6);
-    --vanna-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
-    --vanna-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
-    --vanna-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-    --vanna-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-    --vanna-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    --vanna-chat-spacing: 20px;
+    --vanna-chat-avatar-size: 32px;
   }
 `;
