@@ -28,17 +28,27 @@ class GridQueryRequest(BaseModel):
 
 def resolve_file_path(output_file: str) -> str:
     """Locate output file in workspace or storage."""
-    if os.path.exists(output_file):
+    if not output_file:
+        raise HTTPException(status_code=400, detail="No output file specified.")
+
+    if os.path.isabs(output_file) and os.path.exists(output_file):
         return output_file
 
     cwd_path = os.path.join(os.getcwd(), output_file)
     if os.path.exists(cwd_path):
         return cwd_path
 
+    target_name = os.path.basename(output_file)
     for base in [os.getcwd(), "/tmp"]:
-        candidate = os.path.join(base, os.path.basename(output_file))
+        candidate = os.path.join(base, target_name)
         if os.path.exists(candidate):
             return candidate
+
+        import glob
+        matches = glob.glob(os.path.join(base, "**", target_name), recursive=True)
+        if matches:
+            matches.sort(key=os.path.getmtime, reverse=True)
+            return matches[0]
 
     raise HTTPException(
         status_code=404,
@@ -75,11 +85,14 @@ def load_and_process_dataframe(request_data: Dict[str, Any]) -> tuple[pd.DataFra
     if column_filters and isinstance(column_filters, dict):
         for col, allowed_vals in column_filters.items():
             if col in filtered_df.columns and allowed_vals is not None and len(allowed_vals) > 0:
-                allowed_set = set(allowed_vals)
-                if "__NULL__" in allowed_set or "(NULL)" in allowed_set:
-                    mask = filtered_df[col].isna() | filtered_df[col].isin(allowed_set)
-                else:
-                    mask = filtered_df[col].isin(allowed_set)
+                str_allowed = {str(v) for v in allowed_vals if v is not None and str(v) not in ["__NULL__", "(NULL)"]}
+                has_null = None in allowed_vals or "__NULL__" in allowed_vals or "(NULL)" in allowed_vals
+
+                col_series = filtered_df[col]
+                mask = col_series.astype(str).isin(str_allowed)
+                if has_null:
+                    mask |= col_series.isna()
+
                 filtered_df = filtered_df[mask]
 
     # 3. Sorting

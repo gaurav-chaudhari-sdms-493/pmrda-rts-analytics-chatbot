@@ -66,18 +66,36 @@ export class PlotlyChart extends LitElement {
         pointer-events: none;
       }
 
-      .error-message {
-        padding: var(--vanna-space-4);
-        color: var(--vanna-accent-negative-default);
-        text-align: center;
-        font-style: italic;
+      .chart-export-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(255, 255, 255, 0.04);
+        border-bottom: 1px solid var(--vanna-outline-dimmer, rgba(255, 255, 255, 0.1));
+        margin-bottom: 4px;
       }
 
-      .loading-message {
-        padding: var(--vanna-space-4);
-        color: var(--vanna-foreground-dimmer);
-        text-align: center;
-        font-style: italic;
+      .chart-export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--vanna-foreground-default, #e1e4e8);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--vanna-outline-default, rgba(255, 255, 255, 0.15));
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .chart-export-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+        border-color: var(--vanna-accent-primary-default, #0969da);
+        color: #ffffff;
       }
     `
   ];
@@ -88,6 +106,7 @@ export class PlotlyChart extends LitElement {
   @property({ type: Boolean }) loading = false;
   @property() error = '';
   @property() theme: 'light' | 'dark' = 'dark';
+  @property({ type: Boolean }) showExportButtons = true;
 
   private plotlyDiv?: HTMLElement;
   private resizeObserver?: ResizeObserver;
@@ -125,10 +144,8 @@ export class PlotlyChart extends LitElement {
   private _getDefaultLayout(): PlotlyLayout {
     const isDark = this.theme === 'dark';
 
-    // Start with layout from backend (which may include white background)
     const mergedLayout = {
       ...this.layout,
-      // Only add font/modebar if not already set by backend
       font: this.layout.font || {
         family: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         color: isDark ? 'rgb(242, 244, 247)' : 'rgb(17, 24, 39)',
@@ -140,13 +157,11 @@ export class PlotlyChart extends LitElement {
         activecolor: isDark ? 'rgb(242, 244, 247)' : 'rgb(17, 24, 39)',
         orientation: 'h'
       },
-      // Set explicit dimensions for Shadow DOM compatibility
       autosize: false,
       width: this.layout.width || undefined,
       height: this.layout.height || 400,
     };
 
-    // If backend didn't set background colors, use transparent
     if (!this.layout.paper_bgcolor) {
       mergedLayout.paper_bgcolor = 'transparent';
     }
@@ -160,9 +175,86 @@ export class PlotlyChart extends LitElement {
   private _getDefaultConfig() {
     return {
       responsive: true,
-      displayModeBar: false,
+      displayModeBar: true,
+      displaylogo: false,
+      toImageButtonOptions: {
+        format: 'png' as const,
+        filename: 'chart_export',
+        height: 600,
+        width: 1000,
+        scale: 2
+      },
       ...this.config
     };
+  }
+
+  public async downloadPNG(filename = 'chart') {
+    if (this.plotlyDiv && this.data.length > 0) {
+      await Plotly.downloadImage(this.plotlyDiv, {
+        format: 'png',
+        width: 1200,
+        height: 700,
+        filename: filename
+      });
+    }
+  }
+
+  public async downloadSVG(filename = 'chart') {
+    if (this.plotlyDiv && this.data.length > 0) {
+      await Plotly.downloadImage(this.plotlyDiv, {
+        format: 'svg',
+        width: 1200,
+        height: 700,
+        filename: filename
+      });
+    }
+  }
+
+  public exportDataCSV(filename = 'chart_data') {
+    if (!this.data || this.data.length === 0) return;
+
+    try {
+      const rows: string[] = [];
+      const traces = this.data;
+
+      // Extract traces data into CSV format
+      if (traces.length === 1 && (traces[0].labels || traces[0].x)) {
+        const trace = traces[0];
+        if (trace.type === 'pie' && trace.labels && trace.values) {
+          rows.push('Label,Value');
+          for (let i = 0; i < trace.labels.length; i++) {
+            rows.push(`"${String(trace.labels[i]).replace(/"/g, '""')}",${trace.values[i]}`);
+          }
+        } else if (trace.x && trace.y) {
+          const xName = trace.name || 'X';
+          const yName = trace.name || 'Y';
+          rows.push(`"${xName}","${yName}"`);
+          for (let i = 0; i < trace.x.length; i++) {
+            rows.push(`"${String(trace.x[i]).replace(/"/g, '""')}",${trace.y[i]}`);
+          }
+        }
+      } else {
+        // Multi-trace dataset
+        const traceNames = traces.map((t, idx) => t.name || `Series ${idx + 1}`);
+        rows.push(`"X",${traceNames.map(n => `"${n.replace(/"/g, '""')}"`).join(',')}`);
+        const refTrace = traces[0];
+        if (refTrace && refTrace.x) {
+          for (let i = 0; i < refTrace.x.length; i++) {
+            const xVal = refTrace.x[i];
+            const yVals = traces.map(t => (t.y && t.y[i] !== undefined ? t.y[i] : ''));
+            rows.push(`"${String(xVal).replace(/"/g, '""')}",${yVals.join(',')}`);
+          }
+        }
+      }
+
+      const csvBlob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(csvBlob);
+      link.download = `${filename}.csv`;
+      link.click();
+    } catch (err) {
+      console.error('Failed to export chart data CSV:', err);
+    }
   }
 
   private async _renderChart() {
@@ -188,6 +280,19 @@ export class PlotlyChart extends LitElement {
       ` : this.error ? html`
         <div class="error-message">Error: ${this.error}</div>
       ` : html`
+        ${this.showExportButtons && this.data.length > 0 ? html`
+          <div class="chart-export-toolbar">
+            <button class="chart-export-btn" @click=${() => this.downloadPNG()} title="Download chart as PNG image">
+              📷 Export PNG
+            </button>
+            <button class="chart-export-btn" @click=${() => this.downloadSVG()} title="Download vector SVG chart">
+              📄 Export SVG
+            </button>
+            <button class="chart-export-btn" @click=${() => this.exportDataCSV()} title="Export chart dataset to CSV">
+              📊 Export CSV
+            </button>
+          </div>
+        ` : ''}
         <div class="plotly-div"></div>
       `}
     `;

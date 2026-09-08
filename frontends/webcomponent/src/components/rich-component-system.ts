@@ -521,6 +521,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
     const state = {
       outputFile: output_file,
       pageData: data.slice(0, 25),
+      filteredData: [...data],
       columns: columns.length > 0 ? columns : (data[0] ? Object.keys(data[0]) : []),
       totalRows: total_rows || data.length,
       filteredRows: total_rows || data.length,
@@ -744,7 +745,15 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       Object.keys(state.columnFilters).forEach(col => {
         const allowedSet = state.columnFilters[col];
         if (allowedSet && allowedSet.size > 0) {
-          result = result.filter(row => allowedSet.has(row[col]));
+          const strSet = new Set(Array.from(allowedSet).map(v => v === null || v === undefined ? '__NULL__' : String(v)));
+          const hasNull = strSet.has('__NULL__') || strSet.has('(NULL)');
+
+          result = result.filter(row => {
+            const val = row[col];
+            if (val === null || val === undefined) return hasNull;
+            if (allowedSet.has(val)) return true;
+            return strSet.has(String(val));
+          });
         }
       });
 
@@ -766,6 +775,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         });
       }
 
+      state.filteredData = result;
       state.filteredRows = result.length;
       let pageSizeNum = state.pageSize === 'all' ? result.length : Number(state.pageSize);
       if (pageSizeNum <= 0) pageSizeNum = 25;
@@ -803,9 +813,13 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
     };
 
     const updateView = async () => {
+      let serverSuccess = false;
       if (state.outputFile) {
-        await fetchServerData();
-      } else {
+        const result = await fetchServerData();
+        if (result) serverSuccess = true;
+      }
+
+      if (!serverSuccess) {
         computeClientFallback();
       }
 
@@ -1204,10 +1218,11 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         window.location.href = exportUrl;
       }
     } else {
-      // Fallback client-side export
-      if (exportType === 'csv') this.exportToCSV(state.pageData, state.columns);
-      else if (exportType === 'excel') this.exportToExcel(state.pageData, state.columns, title);
-      else if (exportType === 'pdf') this.exportToPDF(state.pageData, state.columns, title);
+      // Fallback client-side export - export full filtered dataset
+      const exportRows = (state.filteredData && state.filteredData.length > 0) ? state.filteredData : state.pageData;
+      if (exportType === 'csv') this.exportToCSV(exportRows, state.columns);
+      else if (exportType === 'excel') this.exportToExcel(exportRows, state.columns, title);
+      else if (exportType === 'pdf') this.exportToPDF(exportRows, state.columns, title);
     }
   }
 
@@ -1292,11 +1307,11 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         </div>
         ${isTruncated ? `<div style="font-size: 10px; color: #57606a; padding: 2px 4px; border-bottom: 1px solid #f0f0f0; background: #f6f8fa;">Showing top ${MAX_POPUP_ITEMS} of ${filteredItems.length} items.</div>` : ''}
         <div class="jetbrains-filter-list">
-          ${displayedItems.length > 0 ? displayedItems.map((item) => {
-        const isChecked = tempSelected.has(item.rawValue);
+          ${displayedItems.length > 0 ? displayedItems.map((item, idx) => {
+        const isChecked = tempSelected.has(item.rawValue) || (Array.from(tempSelected).some(v => String(v) === String(item.rawValue)));
         return `
               <label class="jetbrains-filter-item">
-                <input type="checkbox" class="filter-item-checkbox" data-key="${this.escapeHtml(String(item.rawValue))}" ${isChecked ? 'checked' : ''}>
+                <input type="checkbox" class="filter-item-checkbox" data-idx="${idx}" ${isChecked ? 'checked' : ''}>
                 <span class="filter-val-text">${this.escapeHtml(item.label)}</span>
                 <span class="jetbrains-filter-count">${item.count}</span>
               </label>
@@ -1345,13 +1360,17 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       checkboxes.forEach((cb) => {
         cb.addEventListener('change', (e) => {
           const target = e.target as HTMLInputElement;
-          const key = target.dataset.key;
-          const found = uniqueItems.find(i => String(i.rawValue) === key);
+          const idx = parseInt(target.dataset.idx || '-1', 10);
+          const found = displayedItems[idx];
           if (found) {
             if (target.checked) {
               tempSelected.add(found.rawValue);
             } else {
               tempSelected.delete(found.rawValue);
+              // Also remove any stringified matching value
+              Array.from(tempSelected).forEach(v => {
+                if (String(v) === String(found.rawValue)) tempSelected.delete(v);
+              });
             }
           }
         });
@@ -1362,6 +1381,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         btnClear.addEventListener('click', () => {
           delete state.columnFilters[column];
           popup.remove();
+          document.removeEventListener('click', onClickOutside);
           onApply();
         });
       }
@@ -1370,6 +1390,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       if (btnCancel) {
         btnCancel.addEventListener('click', () => {
           popup.remove();
+          document.removeEventListener('click', onClickOutside);
         });
       }
 
@@ -1382,6 +1403,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             state.columnFilters[column] = new Set(tempSelected);
           }
           popup.remove();
+          document.removeEventListener('click', onClickOutside);
           onApply();
         });
       }
