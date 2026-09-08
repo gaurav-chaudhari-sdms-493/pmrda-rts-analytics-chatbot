@@ -1641,6 +1641,8 @@ export class StatusCardComponentRenderer extends BaseComponentRenderer {
     const statusIcon = icon || this.getStatusIcon(status);
     const hasMetadata = Object.keys(metadata).length > 0;
 
+    const isTimingCard = title && (title.includes('Timing') || title.includes('Latency'));
+
     container.innerHTML = `
       <div class="status-card-header ${collapsible ? 'collapsible' : ''}">
         <div class="status-card-icon">${statusIcon}</div>
@@ -1656,10 +1658,10 @@ export class StatusCardComponentRenderer extends BaseComponentRenderer {
         </div>
       ` : ''}
       ${hasMetadata ? `
-        <details class="status-card-metadata">
-          <summary class="status-card-metadata-summary">Parameters</summary>
+        <details class="status-card-metadata" ${isTimingCard ? 'open' : ''}>
+          <summary class="status-card-metadata-summary">${isTimingCard ? '⏱️ Phase Metrics Breakdown' : 'Parameters'}</summary>
           <div class="status-card-metadata-content">
-            ${this.renderMetadataTable(metadata)}
+            ${this.renderMetadataTable(metadata, title)}
           </div>
         </details>
       ` : ''}
@@ -1690,13 +1692,42 @@ export class StatusCardComponentRenderer extends BaseComponentRenderer {
     return container;
   }
 
-  private renderMetadataTable(metadata: Record<string, any>): string {
+  private renderMetadataTable(metadata: Record<string, any>, title?: string): string {
+    const isTiming = title && (title.includes('Timing') || title.includes('Latency'));
+
     const rows = Object.entries(metadata).map(([key, value]) => {
       const formattedValue = this.formatMetadataValue(value);
+      let barHtml = '';
+
+      if (typeof value === 'string') {
+        const match = value.match(/\(([\d\.]+)%\)/);
+        if (match) {
+          const pct = parseFloat(match[1]);
+          if (!isNaN(pct)) {
+            let barColor = '#0969da'; // Default blue
+            if (key.includes('LLM')) barColor = '#8a2be2'; // Purple for LLM
+            else if (key.includes('Tool') || key.includes('SQL')) barColor = '#2ea44f'; // Green for SQL/Tool
+            else if (key.includes('Schema') || key.includes('Prompt')) barColor = '#d97706'; // Amber for Prompt
+            else if (key.includes('Context') || key.includes('Memory')) barColor = '#0284c7'; // Cyan for Context
+
+            barHtml = `
+              <div class="timing-bar-bg" style="margin-top: 4px; height: 6px; width: 100%; background: #e1e4e8; border-radius: 3px; overflow: hidden;">
+                <div class="timing-bar-fill" style="height: 100%; width: ${Math.min(100, Math.max(2, pct))}%; background: ${barColor}; border-radius: 3px; transition: width 0.3s ease;"></div>
+              </div>
+            `;
+          }
+        }
+      }
+
+      const isTotalRow = isTiming && (key.includes('Total') || key.toLowerCase().includes('total response'));
+
       return `
-        <tr>
-          <td class="metadata-key">${this.escapeHtml(key)}</td>
-          <td class="metadata-value">${formattedValue}</td>
+        <tr style="${isTotalRow ? 'background-color: #f6f8fa; font-weight: 600;' : ''}">
+          <td class="metadata-key" style="${isTotalRow ? 'font-weight: 700; color: #111;' : ''}">${this.escapeHtml(key)}</td>
+          <td class="metadata-value" style="${isTotalRow ? 'font-weight: 700; color: #0969da;' : ''}">
+            ${formattedValue}
+            ${barHtml}
+          </td>
         </tr>
       `;
     }).join('');
@@ -1705,8 +1736,8 @@ export class StatusCardComponentRenderer extends BaseComponentRenderer {
       <table class="metadata-table">
         <thead>
           <tr>
-            <th>Parameter</th>
-            <th>Value</th>
+            <th>${isTiming ? 'Pipeline Phase' : 'Parameter'}</th>
+            <th>${isTiming ? 'Duration (% Total)' : 'Value'}</th>
           </tr>
         </thead>
         <tbody>
@@ -2777,6 +2808,17 @@ export class ComponentManager {
       // Put technical component into Developer Info container
       const { content, wrapper } = this.getOrCreateDevInfoContainer();
       content.appendChild(element);
+
+      // If this is a timing breakdown card, update header badge
+      const data = component.data || {};
+      const title = data.title || '';
+      if (title.includes('Timing') || title.includes('Latency')) {
+        const badge = wrapper.querySelector('.dev-info-badge');
+        if (badge && data.metadata && data.metadata['Total Response Time']) {
+          badge.textContent = `⏱️ ${data.metadata['Total Response Time']}`;
+        }
+      }
+
       // Ensure wrapper stays at the bottom of the turn
       this.container.appendChild(wrapper);
     } else {

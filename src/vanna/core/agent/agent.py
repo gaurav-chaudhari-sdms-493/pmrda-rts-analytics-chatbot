@@ -5,6 +5,7 @@ This module provides the main Agent class that orchestrates the interaction
 between LLM services, tools, and conversation storage.
 """
 
+import time
 import traceback
 import uuid
 from typing import TYPE_CHECKING, AsyncGenerator, List, Optional
@@ -514,6 +515,16 @@ class Agent:
         # Not triggered, add user message to conversation now
         conversation.add_message(Message(role="user", content=message))
 
+        # Start timing full pipeline execution
+        turn_start_time = time.perf_counter()
+        executed_tool_names: List[str] = []
+        llm_time_ms = 0.0
+        tool_exec_time_ms = 0.0
+        llm_turn_counter = 0
+        llm_turn_details: List[tuple] = []
+
+        t_context_start = time.perf_counter()
+
         # Add initial task
         context_task = Task(
             title="Load conversation context",
@@ -560,6 +571,9 @@ class Agent:
                         "ms",
                         tags={"enricher": enricher.__class__.__name__},
                     )
+
+        context_ms = (time.perf_counter() - t_context_start) * 1000
+        t_prompt_start = time.perf_counter()
 
         # Get available tools for user with observability
         schema_span = None
@@ -640,6 +654,8 @@ class Agent:
             conversation, tool_schemas, user, system_prompt
         )
 
+        prompt_ms = (time.perf_counter() - t_prompt_start) * 1000
+
         # Process with tool loop
         tool_iterations = 0
 
@@ -649,10 +665,20 @@ class Agent:
                 pass
 
             # Get LLM response
+            llm_turn_counter += 1
+            t_llm_start = time.perf_counter()
             if self.config.stream_responses:
                 response = await self._handle_streaming_response(request)
             else:
                 response = await self._send_llm_request(request)
+            turn_dur_ms = (time.perf_counter() - t_llm_start) * 1000
+            llm_time_ms += turn_dur_ms
+
+            if response.is_tool_call():
+                tool_names = [tc.name for tc in response.tool_calls or []]
+                llm_turn_details.append((f"3.{llm_turn_counter} LLM Turn #{llm_turn_counter} (Generate {', '.join(tool_names)})", turn_dur_ms))
+            else:
+                llm_turn_details.append((f"3.{llm_turn_counter} LLM Turn #{llm_turn_counter} (Synthesize Text Answer)", turn_dur_ms))
 
             # Handle tool calls
             if response.is_tool_call():
@@ -824,7 +850,10 @@ class Agent:
                             },
                         )
 
+                    executed_tool_names.append(tool_call.name)
+                    t_tool_start = time.perf_counter()
                     result = await self.tool_registry.execute(tool_call, context)
+                    tool_exec_time_ms += (time.perf_counter() - t_tool_start) * 1000
 
                     if self.observability_provider and tool_exec_span:
                         tool_exec_span.set_attribute("success", result.success)
@@ -1011,6 +1040,46 @@ class Agent:
                     conversation, tool_schemas, user, system_prompt
                 )
             else:
+                total_turn_ms = (time.perf_counter() - turn_start_time) * 1000
+                other_ms = max(0.0, total_turn_ms - (context_ms + prompt_ms + llm_time_ms + tool_exec_time_ms))
+
+                ctx_pct = (context_ms / total_turn_ms * 100) if total_turn_ms > 0 else 0
+                prompt_pct = (prompt_ms / total_turn_ms * 100) if total_turn_ms > 0 else 0
+                llm_pct = (llm_time_ms / total_turn_ms * 100) if total_turn_ms > 0 else 0
+                tool_pct = (tool_exec_time_ms / total_turn_ms * 100) if total_turn_ms > 0 else 0
+                other_pct = (other_ms / total_turn_ms * 100) if total_turn_ms > 0 else 0
+
+                tool_label = f"4. Tool Execution ({', '.join(executed_tool_names)})" if executed_tool_names else "4. Tool Execution (SQL)"
+
+                metadata_dict = {
+                    "1. Context & Agent Memory (RAG)": f"{context_ms:.1f} ms ({ctx_pct:.1f}%)",
+                    "2. Schema & System Prompt Assembly": f"{prompt_ms:.1f} ms ({prompt_pct:.1f}%)",
+                }
+
+                for turn_title, dur in llm_turn_details:
+                    turn_pct = (dur / total_turn_ms * 100) if total_turn_ms > 0 else 0
+                    metadata_dict[turn_title] = f"{dur:.1f} ms ({turn_pct:.1f}%)"
+
+                metadata_dict["3. Total LLM Reasoning Time"] = f"{llm_time_ms:.1f} ms ({llm_pct:.1f}%)"
+                metadata_dict[tool_label] = f"{tool_exec_time_ms:.1f} ms ({tool_pct:.1f}%)"
+                metadata_dict["5. UI Formatting & Overhead"] = f"{other_ms:.1f} ms ({other_pct:.1f}%)"
+                metadata_dict["Total Response Time"] = f"{total_turn_ms / 1000:.2f} s ({total_turn_ms:.0f} ms)"
+
+                timing_card = StatusCardComponent(
+                    title="⚡ Phase-Wise Execution Timing Breakdown",
+                    status="completed",
+                    description=f"Total response time: {total_turn_ms / 1000:.2f}s ({total_turn_ms:.0f} ms)",
+                    icon="⏱️",
+                    metadata=metadata_dict,
+                )
+
+                yield UiComponent(
+                    rich_component=timing_card,
+                    simple_component=SimpleTextComponent(
+                        text=f"Total response time: {total_turn_ms / 1000:.2f}s"
+                    ),
+                )
+
                 # Update status to idle and clear status bar
                 yield UiComponent(  # type: ignore
                     rich_component=StatusBarUpdateComponent(

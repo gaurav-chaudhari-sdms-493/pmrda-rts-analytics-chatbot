@@ -99,15 +99,15 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                         filename, csv_content, context, overwrite=True
                     )
 
-                    # Create result text for LLM with truncated results
+                    # Create result text for LLM with clean preview
                     results_preview = csv_content
                     if len(results_preview) > 1000:
                         results_preview = (
                             results_preview[:1000]
-                            + "\n(Results truncated to 1000 characters. FOR LARGE RESULTS YOU DO NOT NEED TO SUMMARIZE THESE RESULTS OR PROVIDE OBSERVATIONS. THE NEXT STEP SHOULD BE A VISUALIZE_DATA CALL)"
+                            + "\n(Results preview truncated. Summarize key totals or findings directly for the user.)"
                         )
 
-                    result = f"{results_preview}\n\nResults saved to file: {filename}\n\n**IMPORTANT: FOR VISUALIZE_DATA USE FILENAME: {filename}**"
+                    result = f"Query executed successfully ({row_count} total rows returned):\n{results_preview}"
 
                     # Create DataFrame component for UI with capped records and total row count
                     description_str = (

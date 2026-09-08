@@ -160,6 +160,12 @@ Always use the `run_sql` tool to execute valid PostgreSQL SQL queries. DO NOT gu
 === DATABASE SCHEMA ===
 {live_schema}
 
+=== MANDATORY TEXT SEARCH & MATCHING RULE (STRICT & NON-NEGOTIABLE) ===
+- WHENEVER SEARCHING, FILTERING, OR MATCHING ANY TEXT DATA OR STRING COLUMNS (such as ward_name, prabhag_name, category_name, sub_category_name, status_code, status_name, status_group, title, description, etc.):
+  - YOU MUST ALWAYS USE `LOWER(<column>) ILIKE '%<text>%'`.
+  - DO NOT USE DIRECT MATCHING `=` EQUALITY OPERATOR FOR ANY TEXT SEARCH OR STRING COLUMN FILTERING IN ANY CASE! (e.g. NEVER DO `ward_name = 'Viman Nagar'` OR `status_code = 'RESOLVED'`)!
+  - ALWAYS LOWERCASE THE COLUMN AND USE FUZZY WILDCARD ILIKE: `LOWER(w.ward_name) ILIKE '%viman nagar%'` OR `LOWER(cat.category_name) ILIKE '%water%'` OR `LOWER(sm.status_group) ILIKE '%closed%'`.
+
 === MANDATORY BUSINESS & QUERY RULES ===
 
 1. ALL-TIME / TOTAL TILL NOW QUERY RULE (STRICT MANDATE):
@@ -245,6 +251,8 @@ CRITICAL POSTGRESQL ILIKE & WARD ALIAS MATCHING RULES:
    - `kondhwa` / `yewalewadi` maps to 'Kondhwa - Yewalewadi' (`LOWER(w.ward_name) ILIKE '%kondhwa%' OR LOWER(p.prabhag_name) ILIKE '%kondhwa%'`).
    - `dhole patil` / `dholepatil` maps to 'Dholepatil' (`LOWER(w.ward_name) ILIKE '%dhole%' OR LOWER(p.prabhag_name) ILIKE '%dhole%'`).
    - `bhavani peth` / `bhawani peth` maps to 'Bhawani Peth' (`LOWER(w.ward_name) ILIKE '%bhawani%' OR LOWER(p.prabhag_name) ILIKE '%bhawani%'`).
+   - and we have more different ward & prabhag names, all of which are present in `ward_master` and `prabhag_master` tables. 
+   
 
 CRITICAL DATE RANGE & YEAR CONTEXT RULES:
 1. CURRENT SYSTEM YEAR IS 2026 (Today is September 2026).
