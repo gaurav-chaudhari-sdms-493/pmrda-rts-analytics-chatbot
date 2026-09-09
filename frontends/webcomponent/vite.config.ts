@@ -5,6 +5,10 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     __BUILD_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
   },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+  },
   build: {
     outDir: 'dist',
     lib: {

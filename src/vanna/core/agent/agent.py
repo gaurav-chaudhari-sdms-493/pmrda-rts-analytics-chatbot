@@ -196,21 +196,45 @@ class Agent:
                         exc_info=True,
                     )
 
-            # Yield error component to UI (simple, user-friendly message)
-            error_description = "An unexpected error occurred while processing your message. Please try again."
-            if conversation_id:
-                error_description += f"\n\nConversation ID: {conversation_id}"
+            error_msg_str = str(e)
+            if any(k in error_msg_str.lower() for k in ["402", "credit", "limit", "in_flight", "budget", "exceeded"]):
+                error_title = "AI Service Credit / Weekly Limit Reached"
+                error_description = "OpenRouter API key weekly spending limit or account credit balance has been reached."
+                one_line_chat_response = "⚠️ **AI Service Limit Reached:** OpenRouter key weekly spending limit or account credit balance has been reached. Please check key limits or top up credits."
+                error_metadata = {
+                    "Reason": "Key weekly limit ($2.00) or account balance ($0.00) reached",
+                    "How to Fix (Step 1)": "Visit openrouter.ai/settings/keys and increase weekly limit (e.g. set to $5.00)",
+                    "How to Fix (Step 2)": "Visit openrouter.ai/settings/credits to top up credits",
+                    "मराठी माहिती": "ओपनराऊटर की ची वरची खर्च मर्यादा पूर्ण झाली आहे. कृपया मर्यादा वाढवा.",
+                }
+                if conversation_id:
+                    error_metadata["Conversation ID"] = conversation_id
+            else:
+                error_title = "Error Processing Message"
+                error_description = "An unexpected error occurred while processing your message."
+                one_line_chat_response = f"⚠️ **Message Processing Error:** {error_msg_str}"
+                error_metadata = {"Details": error_msg_str}
+                if conversation_id:
+                    error_metadata["Conversation ID"] = conversation_id
 
+            # Yield 1-line text message directly to primary chat response screen
+            yield UiComponent(
+                rich_component=RichTextComponent(
+                    content=one_line_chat_response, markdown=True
+                ),
+                simple_component=SimpleTextComponent(text=one_line_chat_response),
+            )
+
+            # Yield technical StatusCardComponent to Developer Info container
             yield UiComponent(
                 rich_component=StatusCardComponent(
-                    title="Error Processing Message",
+                    title=error_title,
                     status="error",
                     description=error_description,
                     icon="⚠️",
+                    metadata=error_metadata,
                 ),
-                simple_component=SimpleTextComponent(
-                    text=f"Error: An unexpected error occurred. Please try again.{f' (Conversation ID: {conversation_id})' if conversation_id else ''}"
-                ),
+                simple_component=SimpleTextComponent(text=error_description),
             )
 
             # Update status bar to show error state
@@ -522,6 +546,8 @@ class Agent:
         tool_exec_time_ms = 0.0
         llm_turn_counter = 0
         llm_turn_details: List[tuple] = []
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
 
         t_context_start = time.perf_counter()
 
@@ -673,6 +699,19 @@ class Agent:
                 response = await self._send_llm_request(request)
             turn_dur_ms = (time.perf_counter() - t_llm_start) * 1000
             llm_time_ms += turn_dur_ms
+
+            # Accumulate token usage for this turn
+            p_tok = getattr(response, "usage", {}).get("prompt_tokens", 0) if getattr(response, "usage", None) else 0
+            c_tok = getattr(response, "usage", {}).get("completion_tokens", 0) if getattr(response, "usage", None) else 0
+            if not p_tok:
+                req_text = (request.system_prompt or "") + "".join(m.content or "" for m in request.messages)
+                p_tok = max(1, len(req_text) // 4)
+            if not c_tok:
+                res_text = (response.content or "") + "".join(tc.name + str(tc.arguments) for tc in response.tool_calls or [])
+                c_tok = max(1, len(res_text) // 4)
+
+            total_prompt_tokens += p_tok
+            total_completion_tokens += c_tok
 
             if response.is_tool_call():
                 tool_names = [tc.name for tc in response.tool_calls or []]
@@ -1064,6 +1103,21 @@ class Agent:
                 metadata_dict[tool_label] = f"{tool_exec_time_ms:.1f} ms ({tool_pct:.1f}%)"
                 metadata_dict["5. UI Formatting & Overhead"] = f"{other_ms:.1f} ms ({other_pct:.1f}%)"
                 metadata_dict["Total Response Time"] = f"{total_turn_ms / 1000:.2f} s ({total_turn_ms:.0f} ms)"
+
+                tot_tok = total_prompt_tokens + total_completion_tokens
+                p_cost_usd = total_prompt_tokens * 0.0000004
+                c_cost_usd = total_completion_tokens * 0.0000008
+                tot_cost_usd = p_cost_usd + c_cost_usd
+                tot_cost_inr = tot_cost_usd * 86.5
+
+                cost_usd_fmt = f"${tot_cost_usd:.5f}" if tot_cost_usd < 0.01 else f"${tot_cost_usd:.4f}"
+                cost_inr_fmt = f"₹{tot_cost_inr:.3f}" if tot_cost_inr < 0.1 else f"₹{tot_cost_inr:.2f}"
+
+                metadata_dict["Prompt Tokens"] = f"{total_prompt_tokens:,} tokens"
+                metadata_dict["Completion Tokens"] = f"{total_completion_tokens:,} tokens"
+                metadata_dict["Total Tokens Used"] = f"{tot_tok:,} tokens"
+                metadata_dict["Cost (USD)"] = f"{cost_usd_fmt} USD"
+                metadata_dict["Cost (INR)"] = f"{cost_inr_fmt} INR"
 
                 timing_card = StatusCardComponent(
                     title="⚡ Phase-Wise Execution Timing Breakdown",

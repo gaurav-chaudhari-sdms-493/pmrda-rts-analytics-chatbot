@@ -2815,7 +2815,16 @@ export class ComponentManager {
       if (title.includes('Timing') || title.includes('Latency')) {
         const badge = wrapper.querySelector('.dev-info-badge');
         if (badge && data.metadata && data.metadata['Total Response Time']) {
-          badge.textContent = `⏱️ ${data.metadata['Total Response Time']}`;
+          const totalTime = data.metadata['Total Response Time'];
+          const totalTokens = data.metadata['Total Tokens Used'];
+          const costUsd = data.metadata['Cost (USD)'];
+          const costInr = data.metadata['Cost (INR)'];
+
+          if (totalTokens && costUsd && costInr) {
+            badge.textContent = `⏱️ ${totalTime} | 🪙 ${totalTokens} | 💵 ${costUsd} (${costInr})`;
+          } else {
+            badge.textContent = `⏱️ ${totalTime}`;
+          }
         }
       }
 

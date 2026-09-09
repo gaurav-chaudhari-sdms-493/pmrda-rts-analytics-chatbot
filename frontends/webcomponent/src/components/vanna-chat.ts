@@ -532,8 +532,19 @@ export class VannaChat extends LitElement {
   }
 
   private ensureApiClient() {
+    let baseUrl = this.apiBaseUrl;
+    if (typeof window !== 'undefined' && window.location) {
+      const currentHost = window.location.hostname;
+      if (!baseUrl || baseUrl === 'http://127.0.0.1:8000' || baseUrl === 'http://localhost:8000') {
+        baseUrl = `${window.location.protocol}//${currentHost}:8000`;
+      } else if (baseUrl.includes('127.0.0.1') || baseUrl.includes('localhost')) {
+        if (currentHost !== '127.0.0.1' && currentHost !== 'localhost') {
+          baseUrl = baseUrl.replace('127.0.0.1', currentHost).replace('localhost', currentHost);
+        }
+      }
+    }
     this.apiClient = new VannaApiClient({
-      baseUrl: this.apiBaseUrl,
+      baseUrl: baseUrl,
       sseEndpoint: this.sseEndpoint,
       wsEndpoint: this.wsEndpoint,
       pollEndpoint: this.pollEndpoint

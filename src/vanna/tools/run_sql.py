@@ -82,10 +82,35 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                         "results": [],
                     }
                 else:
-                    # Convert DataFrame to records
-                    results_data = df.to_dict("records")
-                    columns = df.columns.tolist()
+                    import pandas as pd
+                    import numpy as np
+
+                    columns = [str(col) for col in df.columns.tolist()]
                     row_count = len(df)
+
+                    # Replace NaN/NaT with None and sanitize types for Pydantic JSON serialization
+                    df_clean = df.where(pd.notnull(df), None)
+                    raw_records = df_clean.to_dict("records")
+
+                    results_data = []
+                    for row in raw_records:
+                        clean_row = {}
+                        for k, v in row.items():
+                            key_str = str(k)
+                            if v is None or pd.isna(v):
+                                clean_row[key_str] = None
+                            elif isinstance(v, (np.integer, int)):
+                                clean_row[key_str] = int(v)
+                            elif isinstance(v, (np.floating, float)):
+                                if np.isnan(v) or np.isinf(v):
+                                    clean_row[key_str] = None
+                                else:
+                                    clean_row[key_str] = float(v)
+                            elif isinstance(v, (pd.Timestamp, np.datetime64)):
+                                clean_row[key_str] = str(v)
+                            else:
+                                clean_row[key_str] = v
+                        results_data.append(clean_row)
 
                     # Cap UI payload records to 1,000 for high performance rendering
                     MAX_UI_ROWS = 1000

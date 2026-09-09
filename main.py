@@ -26,6 +26,7 @@ from vanna.servers.fastapi import VannaFastAPIServer
 from vanna.integrations.openai import OpenAILlmService
 from vanna.integrations.postgres import PostgresRunner
 from vanna.integrations.local.agent_memory import DemoAgentMemory
+from vanna.core.filter import ContextWindowFilter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("pmc_chatbot.schema")
@@ -79,10 +80,20 @@ def fetch_live_database_schema() -> str:
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute(
-            """
+            r"""
             SELECT table_name, column_name, data_type
             FROM information_schema.columns
             WHERE table_schema = 'public'
+              AND table_name NOT LIKE '\_%'
+              AND table_name NOT LIKE 'vw\_%'
+              AND table_name NOT LIKE 'migration\_%'
+              AND table_name NOT LIKE 'notification\_%'
+              AND table_name NOT LIKE 'sequelize%'
+              AND table_name NOT LIKE 'Sequelize%'
+              AND table_name NOT LIKE '%_log'
+              AND table_name NOT LIKE '%_cache'
+              AND table_name NOT LIKE '%_config'
+              AND table_name NOT LIKE '%_permission'
             ORDER BY table_name, ordinal_position;
         """
         )
@@ -207,7 +218,20 @@ Always use the `run_sql` tool to execute valid PostgreSQL SQL queries. DO NOT gu
 6. PENDING / OPEN COMPLAINTS RULE:
    When user asks for "pending", "open", or "unresolved" complaints, ALWAYS JOIN `status_master sm ON c.status_id = sm.id` AND filter `sm.status_group != 'CLOSED'` (or `sm.status_code NOT IN ('RESOLVED', 'CLOSED_INVALID')`). DO NOT filter on `is_terminal`.
 
-7. ADDITIONAL RULES:
+7. CITIZEN / REGISTERED BY JOIN RULE (STRICT MANDATE):
+   Whenever querying who registered or filed a complaint, citizen details, mobile number, or registered user details (e.g., "kisne register ki hai", "who registered complaint", "registered by"):
+   - YOU MUST ALWAYS JOIN `user_master` ON `c.citizen_id = um.id` (`LEFT JOIN user_master um ON c.citizen_id = um.id`).
+   - NEVER USE `c.registered_by_id` TO JOIN `user_master` (`registered_by_id` contains ALL NULL values and is unused).
+   - Standard SQL Pattern: `SELECT c.complaint_number, c.citizen_id, um.full_name as registered_by_name, um.mobile as registered_by_mobile FROM complaint c LEFT JOIN user_master um ON c.citizen_id = um.id WHERE c.complaint_number = 'C163661';`
+
+8. NO TABLE IN TEXT RESPONSE RULE (STRICT MANDATE):
+   - DO NOT generate Markdown tables (`| ... |`) in your text responses!
+   - The UI ALREADY automatically displays the interactive Data Table grid ("Query Results") for table records.
+   - Your text response MUST be a clean, natural language SUMMARY paragraph or concise bullet points summarizing the answer directly.
+   - Correct Example (English): "Complaint **W64444** was registered by **Gampeshwar Sahu** (Citizen ID: 110567, Mobile: 9923632379, Email: gampesh@gmail.com)."
+   - Correct Example (Marathi): "तक्रार **W64444** ही **गंपेश्वर साहू** (नागरिक ID: 110567, मोबाईल: 9923632379) यांनी नोंदवली आहे."
+
+9. ADDITIONAL RULES:
    - NEVER search using `complaint.title` or `complaint.description`. Always search standard master table values (`category_master.category_name` or `sub_category_master.sub_category_name`).
    - NEVER perform `SELECT * FROM complaint`. ALWAYS select specific relevant summary columns (e.g. `c.id`, `c.complaint_number`, `c.title`, `cat.category_name`, `w.ward_name`, `p.prabhag_name`, `c.created_at`).
    - ALWAYS convert database text fields to lowercase using `LOWER(col_name)` and compare against lowercase search strings.
@@ -279,6 +303,7 @@ BUSINESS_CONTEXT_DOCUMENTATION = [
     - Mandatory Response Context: Every answer MUST state the exact timeframe (e.g., All-time since system launch vs Year 2026), location, category, and status filters applied based on the SQL query and user question.
     - Primary Entity: Complaints registered by citizens in Pune Municipal Corporation.
     - Main Master Tables: complaint (c), category_master (cat), sub_category_master (sub), ward_master (w), prabhag_master (p).
+    - Citizen/Registered By Join Rule (MANDATORY): When querying who registered or filed a complaint ('kisne register ki hai', 'registered by', 'citizen details'), YOU MUST ALWAYS JOIN `user_master` ON `c.citizen_id = um.id` (`LEFT JOIN user_master um ON c.citizen_id = um.id`). NEVER USE `c.registered_by_id` as it contains all NULL values and is unused.
     - Standard Query Pattern: ALWAYS select c.id, c.complaint_number, c.title, cat.category_name, w.ward_name, p.prabhag_name, c.created_at.
     """,
     """
@@ -337,6 +362,7 @@ vanna_agent = Agent(
     user_resolver=user_resolver,
     agent_memory=agent_memory,
     system_prompt_builder=PmcSchemaSystemPromptBuilder(),
+    conversation_filters=[ContextWindowFilter(max_questions=5)],
 )
 
 # Alias for backwards compatibility

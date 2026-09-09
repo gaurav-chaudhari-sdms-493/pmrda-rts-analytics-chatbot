@@ -65,3 +65,28 @@ class ConversationFilter(ABC):
             filters may already be modified by earlier filters.
         """
         return messages
+
+
+class LastNQuestionsFilter(ConversationFilter):
+    """Filter that keeps only the last N user questions and their subsequent conversation turns."""
+
+    def __init__(self, max_questions: int = 5):
+        self.max_questions = max_questions
+
+    async def filter_messages(self, messages: List["Message"]) -> List["Message"]:
+        if not messages:
+            return messages
+
+        user_indices = [
+            i for i, msg in enumerate(messages) if getattr(msg, "role", None) == "user"
+        ]
+
+        if len(user_indices) <= self.max_questions:
+            return messages
+
+        cutoff_index = user_indices[-self.max_questions]
+        return messages[cutoff_index:]
+
+
+# Alias ContextWindowFilter to LastNQuestionsFilter
+ContextWindowFilter = LastNQuestionsFilter

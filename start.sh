@@ -19,12 +19,18 @@ else
     PYTHON_BIN="python3"
 fi
 
+# Get local network IP address
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -z "$LOCAL_IP" ]; then
+    LOCAL_IP="127.0.0.1"
+fi
+
 echo "=================================================="
 echo "⚡ Starting Vanna Agent Stack (Backend & Frontend)"
 echo "=================================================="
 
 # 2. Start FastAPI Backend (Port 8000)
-echo "[1/2] Starting FastAPI Backend on http://127.0.0.1:8000..."
+echo "[1/2] Starting FastAPI Backend on http://0.0.0.0:8000..."
 "$PYTHON_BIN" main.py &
 BACKEND_PID=$!
 
@@ -33,7 +39,7 @@ sleep 2
 
 # 3. Start Web Components Frontend (Port 5173)
 if [ -d "$SCRIPT_DIR/frontends/webcomponent" ]; then
-    echo "[2/2] Starting Vite Frontend on http://localhost:5173..."
+    echo "[2/2] Starting Vite Frontend on http://0.0.0.0:5173..."
     cd "$SCRIPT_DIR/frontends/webcomponent"
     npm run dev -- --host &
     FRONTEND_PID=$!
@@ -41,8 +47,9 @@ fi
 
 echo "=================================================="
 echo "✅ Services Started!"
-echo "👉 FastAPI Backend:  http://127.0.0.1:8000"
-echo "👉 Web Component UI: http://localhost:5173/"
+echo "👉 Local Access:      http://localhost:5173/"
+echo "👉 Phone/Network IP:  http://${LOCAL_IP}:5173/"
+echo "👉 FastAPI Backend:   http://${LOCAL_IP}:8000"
 echo "Press Ctrl+C to stop all services."
 echo "=================================================="
 

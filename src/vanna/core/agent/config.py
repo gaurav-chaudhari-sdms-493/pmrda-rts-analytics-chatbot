@@ -118,6 +118,6 @@ class AgentConfig(BaseModel):
     auto_save_conversations: bool = Field(default=True)
     include_thinking_indicators: bool = Field(default=True)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=None, gt=0)
+    max_tokens: Optional[int] = Field(default=1500, gt=0)
     ui_features: UiFeatures = Field(default_factory=UiFeatures)
     audit_config: AuditConfig = Field(default_factory=AuditConfig)
