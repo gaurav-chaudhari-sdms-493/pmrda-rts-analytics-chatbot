@@ -203,12 +203,7 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                 )
 
                 metadata = {"rows_affected": rows_affected, "query_type": query_type}
-                ui_component = UiComponent(
-                    rich_component=NotificationComponent(
-                        type=ComponentType.NOTIFICATION, level="success", message=result
-                    ),
-                    simple_component=SimpleTextComponent(text=result),
-                )
+                ui_component = None
 
             return ToolResult(
                 success=True,
