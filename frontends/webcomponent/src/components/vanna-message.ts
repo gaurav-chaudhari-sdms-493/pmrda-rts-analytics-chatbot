@@ -227,11 +227,14 @@ export class VannaMessage extends LitElement {
       return '\n\n' + html + '\n\n';
     });
 
+    // Parse Horizontal Rules (---, ***, ___)
+    str = str.replace(/^[\-\*_]{3,}\s*$/gm, '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />');
+
     const blocks = str.split(/\n\n+/);
     const htmlBlocks = blocks.map(block => {
       block = block.trim();
       if (!block) return '';
-      if (block.startsWith('<div class="table-wrapper">')) return block;
+      if (block.startsWith('<div class="table-wrapper">') || block.startsWith('<hr')) return block;
       if (block.startsWith('# ')) return `<h3>${formatInline(block.substring(2))}</h3>`;
       if (block.startsWith('## ')) return `<h4>${formatInline(block.substring(3))}</h4>`;
       if (block.startsWith('### ')) return `<h5>${formatInline(block.substring(4))}</h5>`;

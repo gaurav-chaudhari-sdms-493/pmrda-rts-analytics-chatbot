@@ -187,3 +187,11 @@ def register_chat_routes(
             traceback.print_stack()
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+    @app.get("/api/vanna/v2/history/{conversation_id}")
+    async def get_history(conversation_id: str) -> Dict[str, Any]:
+        """Fetch chat history directly from pmc_metadata_db."""
+        from ...metadata_logger import get_metadata_logger
+        history = get_metadata_logger().fetch_chat_history(conversation_id)
+        return {"conversation_id": conversation_id, "messages": history}
+

@@ -1118,6 +1118,17 @@ class Agent:
                 metadata_dict["Total Tokens Used"] = f"{tot_tok:,} tokens"
                 metadata_dict["Cost (USD)"] = f"{cost_usd_fmt} USD"
                 metadata_dict["Cost (INR)"] = f"{cost_inr_fmt} INR"
+                metadata_dict["_raw_metrics"] = {
+                    "phase1_rag_ms": round(context_ms, 2),
+                    "phase2_schema_prompt_ms": round(prompt_ms, 2),
+                    "phase3_llm_reasoning_ms": round(llm_time_ms, 2),
+                    "phase4_sql_execution_ms": round(tool_exec_time_ms, 2),
+                    "phase5_ui_overhead_ms": round(other_ms, 2),
+                    "prompt_tokens": total_prompt_tokens,
+                    "completion_tokens": total_completion_tokens,
+                    "total_tokens": tot_tok,
+                    "estimated_cost_usd": round(tot_cost_usd, 6),
+                }
 
                 timing_card = StatusCardComponent(
                     title="⚡ Phase-Wise Execution Timing Breakdown",

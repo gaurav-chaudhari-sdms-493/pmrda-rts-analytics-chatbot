@@ -690,7 +690,20 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           }
         });
 
-        const res = await fetch('/api/vanna/v2/grid/data', {
+        const resolveGridApiUrl = (path: string) => {
+          const customBase = (window as any).VANNA_API_BASE_URL;
+          if (customBase) {
+            return `${customBase.replace(/\/+$/, '')}${path}`;
+          }
+          if (window.location.port === '5173') {
+            return `http://${window.location.hostname}:8000${path}`;
+          }
+          return path;
+        };
+
+        const res = await fetch(resolveGridApiUrl('/api/vanna/v2/grid/data'), {
+
+
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -965,35 +978,37 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         `;
       }
 
-      // Render Pagination Bar
+      // Render Pagination Bar only when columns and total rows exist
       let paginationHTML = '';
-      const rangeText = state.filteredRows > 0
-        ? `${state.startRow} - ${state.endRow} of ${state.filteredRows}`
-        : '0 rows';
+      if (state.columns.length > 0 && state.totalRows > 0) {
+        const rangeText = state.filteredRows > 0
+          ? `${state.startRow} - ${state.endRow} of ${state.filteredRows}`
+          : '0 rows';
 
-      paginationHTML = `
-        <div class="jetbrains-pagination-bar">
-          <div class="page-nav-group">
-            <button class="page-nav-btn page-first" ${state.currentPage <= 1 ? 'disabled' : ''} title="First Page">|◄</button>
-            <button class="page-nav-btn page-prev" ${state.currentPage <= 1 ? 'disabled' : ''} title="Previous Page">◄</button>
-            <span class="page-range-info">${rangeText}</span>
-            <button class="page-nav-btn page-next" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Next Page">►</button>
-            <button class="page-nav-btn page-last" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Last Page">►|</button>
-          </div>
+        paginationHTML = `
+          <div class="jetbrains-pagination-bar">
+            <div class="page-nav-group">
+              <button class="page-nav-btn page-first" ${state.currentPage <= 1 ? 'disabled' : ''} title="First Page">|◄</button>
+              <button class="page-nav-btn page-prev" ${state.currentPage <= 1 ? 'disabled' : ''} title="Previous Page">◄</button>
+              <span class="page-range-info">${rangeText}</span>
+              <button class="page-nav-btn page-next" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Next Page">►</button>
+              <button class="page-nav-btn page-last" ${state.currentPage >= totalPages ? 'disabled' : ''} title="Last Page">►|</button>
+            </div>
 
-          <div class="page-size-selector">
-            <span>Rows:</span>
-            <select class="page-size-select">
-              <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
-              <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
-              <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
-              <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
-              <option value="500" ${state.pageSize === 500 ? 'selected' : ''}>500</option>
-              <option value="all" ${state.pageSize === 'all' ? 'selected' : ''}>All</option>
-            </select>
+            <div class="page-size-selector">
+              <span>Rows:</span>
+              <select class="page-size-select">
+                <option value="10" ${state.pageSize === 10 ? 'selected' : ''}>10</option>
+                <option value="25" ${state.pageSize === 25 ? 'selected' : ''}>25</option>
+                <option value="50" ${state.pageSize === 50 ? 'selected' : ''}>50</option>
+                <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
+                <option value="500" ${state.pageSize === 500 ? 'selected' : ''}>500</option>
+                <option value="all" ${state.pageSize === 'all' ? 'selected' : ''}>All</option>
+              </select>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
 
       const showTable = state.activeView === 'table';
 
@@ -1586,13 +1601,18 @@ export class TextComponentRenderer extends BaseComponentRenderer {
     if (font_weight) textStyle += `font-weight: ${font_weight}; `;
     if (text_align) textStyle += `text-align: ${text_align}; `;
 
+    const isMarkdown = markdown || /^#|^\*|^\-|^\||```/.test((content || '').trim()) || (content || '').includes('\n|');
+
     if (code_language) {
       // Code block
       container.innerHTML = `
         <pre class="text-code" style="${textStyle}"><code class="language-${code_language}">${this.escapeHtml(content)}</code></pre>
       `;
-    } else if (markdown) {
-      // Markdown text (simple implementation)
+    } else if (content.trim().startsWith('<')) {
+      // HTML payload - render directly as DOM elements
+      container.innerHTML = content;
+    } else if (isMarkdown) {
+      // Markdown text with support for tables, headers, formatting & lists
       container.innerHTML = `
         <div class="text-markdown" style="${textStyle}">${this.renderMarkdown(content)}</div>
       `;
@@ -1604,6 +1624,20 @@ export class TextComponentRenderer extends BaseComponentRenderer {
     }
 
 
+    // Attach click listeners to PMC suggestion chips if present
+    const chips = container.querySelectorAll('.pmc-suggestion-chip') as NodeListOf<HTMLElement>;
+    chips.forEach(chip => {
+      chip.addEventListener('click', async () => {
+        const query = chip.getAttribute('data-query');
+        if (query) {
+          const vannaChat = document.querySelector('vanna-chat') as any;
+          if (vannaChat && typeof vannaChat.sendMessage === 'function') {
+            await vannaChat.sendMessage(query);
+          }
+        }
+      });
+    });
+
     return container;
   }
 
@@ -1614,16 +1648,91 @@ export class TextComponentRenderer extends BaseComponentRenderer {
   }
 
   private renderMarkdown(text: string): string {
-    // Simple markdown rendering - just basic formatting
-    return text
-      .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+    if (!text) return '';
+    let str = text.replace(/\r\n/g, '\n');
+
+    // Fix blank lines between markdown table rows
+    while (/(^\|[^\n]+\|\s*\n)\s*\n+(?=\|[^\n]+\|)/m.test(str)) {
+      str = str.replace(/(^\|[^\n]+\|\s*\n)\s*\n+(?=\|[^\n]+\|)/gm, '$1');
+    }
+
+    const formatInline = (s: string): string => {
+      return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="font-family: monospace; background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0d8a6a;">$1</code>');
+    };
+
+    // Parse Markdown Tables (GFM pipe tables)
+    const tableRegex = /((?:(?:^|\n)\|[^\n]+\|)+)/g;
+    str = str.replace(tableRegex, (match) => {
+      const lines = match.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return match;
+
+      let html = '<div class="table-wrapper"><table class="markdown-table">';
+      let inBody = false;
+
+      lines.forEach((line, index) => {
+        if (/^\|[\s\-:|]+\|$/.test(line)) {
+          if (index === 1) {
+            html += '</thead><tbody>';
+            inBody = true;
+          }
+          return;
+        }
+
+        const cells = line.split('|').slice(1, -1).map(c => c.trim());
+        if (index === 0 && !inBody) {
+          html += '<thead><tr>';
+          cells.forEach(c => { html += `<th>${formatInline(c)}</th>`; });
+          html += '</tr>';
+        } else {
+          if (!inBody) {
+            html += '<tbody>';
+            inBody = true;
+          }
+          html += '<tr>';
+          cells.forEach(c => { html += `<td>${formatInline(c)}</td>`; });
+          html += '</tr>';
+        }
+      });
+
+      if (inBody) html += '</tbody>';
+      html += '</table></div>';
+      return '\n\n' + html + '\n\n';
+    });
+
+    // Parse Horizontal Rules (---, ***, ___)
+    str = str.replace(/^[\-\*_]{3,}\s*$/gm, '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />');
+
+    // Parse Headers
+    str = str
+      .replace(/^#### (.*$)/gm, '<h4 style="margin: 10px 0 6px 0; font-size: 1.05em; font-weight: 600; color: #1e293b;">$1</h4>')
+      .replace(/^### (.*$)/gm, '<h3 style="margin: 12px 0 8px 0; font-size: 1.15em; font-weight: 600; color: #1e293b;">$1</h3>')
+      .replace(/^## (.*$)/gm, '<h2 style="margin: 16px 0 10px 0; font-size: 1.25em; font-weight: 600; color: #1e293b;">$1</h2>')
+      .replace(/^# (.*$)/gm, '<h1 style="margin: 20px 0 12px 0; font-size: 1.4em; font-weight: 700; color: #0f172a;">$1</h1>');
+
+    // Parse Inline Formatting
+    str = str
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/^- (.*$)/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/^(?!<[h|u|l])(.+)$/gm, '<p>$1</p>');
+      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Parse Lists
+    str = str
+      .replace(/^[•\-]\s+(.*$)/gm, '<li style="margin-bottom: 4px;">$1</li>')
+      .replace(/((?:<li[^>]*>.*?<\/li>\s*)+)/gs, '<ul style="margin: 8px 0; padding-left: 20px; list-style-type: disc;">$1</ul>');
+
+    // Parse Paragraphs & Linebreaks
+    const parts = str.split(/\n\n+/);
+    return parts.map(part => {
+      const trimmed = part.trim();
+      if (!trimmed) return '';
+      if (trimmed.startsWith('<h') || trimmed.startsWith('<ul') || trimmed.startsWith('<hr') || trimmed.startsWith('<div class="table-wrapper">')) return trimmed;
+      return `<p style="margin: 0 0 8px 0; line-height: 1.6; color: #334155;">${trimmed.replace(/\n/g, '<br/>')}</p>`;
+    }).filter(Boolean).join('');
   }
 }
 
@@ -2750,6 +2859,18 @@ export class ComponentManager {
     if (!update.component) return;
 
     const component = this.normalizeComponent(update.component);
+
+    // If a component with this ID already exists, replace it in-place
+    if (this.components.has(component.id)) {
+      this.replaceComponent({
+        operation: 'replace',
+        target_id: component.id,
+        component: component,
+        timestamp: update.timestamp
+      });
+      return;
+    }
+
     const element = this.registry.render(component);
     this.components.set(component.id, component);
     this.elements.set(component.id, element);

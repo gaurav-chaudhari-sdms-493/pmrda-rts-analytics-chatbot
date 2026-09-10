@@ -55,9 +55,33 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
 
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
         """Execute a SQL query using the injected SqlRunner."""
+        import time
+        from vanna.metadata_logger import get_metadata_logger
+
+        start_time = time.time()
         try:
             # Use the injected SqlRunner to execute the query
             df = await self.sql_runner.run_sql(args, context)
+            elapsed_ms = (time.time() - start_time) * 1000.0
+            row_count = len(df) if not df.empty else 0
+
+            # Explicitly store query execution in pmc_metadata_db
+            try:
+                get_metadata_logger().log_query_execution(
+                    query_text=args.sql,
+                    session_id=context.conversation_id,
+                    status="SUCCESS",
+                    execution_time_ms=elapsed_ms,
+                    result_row_count=row_count,
+                )
+                if hasattr(context, "metadata") and isinstance(context.metadata, dict):
+                    context.metadata["last_sql_used"] = args.sql
+                    context.metadata["last_sql_execution_ms"] = elapsed_ms
+                    context.metadata["last_sql_total_records"] = row_count
+            except Exception:
+                pass
+
+
 
             # Determine query type
             query_type = args.sql.strip().upper().split()[0]
@@ -123,6 +147,8 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                     await self.file_system.write_file(
                         filename, csv_content, context, overwrite=True
                     )
+                    if hasattr(context, "metadata") and isinstance(context.metadata, dict):
+                        context.metadata["last_sql_output_file"] = filename
 
                     # Create result text for LLM with clean preview
                     results_preview = csv_content
@@ -141,7 +167,10 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                         else f"SQL query returned {row_count} total rows (showing first {MAX_UI_ROWS} in grid for performance)"
                     )
 
+                    grid_component_id = f"dataframe-{context.request_id}" if getattr(context, "request_id", None) else f"dataframe-{context.conversation_id}"
+
                     dataframe_component = DataFrameComponent.from_records(
+                        id=grid_component_id,
                         records=cast(List[Dict[str, Any]], ui_records),
                         title="Query Results",
                         description=description_str,
@@ -161,7 +190,10 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                         "query_type": query_type,
                         "results": results_data,
                         "output_file": filename,
+                        "sql": args.sql,
+                        "execution_time_ms": elapsed_ms,
                     }
+
             else:
                 # For non-SELECT queries (INSERT, UPDATE, DELETE, etc.)
                 # The SqlRunner should return a DataFrame with affected row count
@@ -190,14 +222,7 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
             return ToolResult(
                 success=False,
                 result_for_llm=error_message,
-                ui_component=UiComponent(
-                    rich_component=NotificationComponent(
-                        type=ComponentType.NOTIFICATION,
-                        level="error",
-                        message=error_message,
-                    ),
-                    simple_component=SimpleTextComponent(text=error_message),
-                ),
+                ui_component=None,
                 error=str(e),
                 metadata={"error_type": "sql_error"},
             )

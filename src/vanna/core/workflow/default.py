@@ -59,12 +59,13 @@ class DefaultWorkflowHandler(WorkflowHandler):
             is_admin = "admin" in user.group_memberships
 
             help_content = (
-                "## 🤖 Vanna AI Assistant\n\n"
-                "I'm your AI data analyst! Here's what I can help you with:\n\n"
-                "**💬 Natural Language Queries**\n"
-                '- "Show me sales data for last quarter"\n'
-                '- "Which customers have the highest orders?"\n'
-                '- "Create a chart of revenue by month"\n\n'
+                "## 🏛️ PMC AI Assistant (पुणे महानगरपालिका AI सहाय्यक)\n\n"
+                "I am your dedicated AI Assistant for Pune Municipal Corporation (PMC) citizen complaint analytics and statistics.\n\n"
+                "**💬 Example Queries (English & Marathi)**\n"
+                '• "Show total complaints count till now" (एकूण तक्रारींची संख्या)\n'
+                '• "Show complaints breakdown by status" (तक्रार स्थितीनुसार वर्गीकरण)\n'
+                '• "Which department received the highest complaints?" (सर्वात जास्त तक्रारी आलेला विभाग)\n'
+                '• "Show complaints registered in last 30 days"\n\n'
                 "**🔧 Commands**\n"
                 "- `/help` - Show this help message\n"
             )
@@ -77,7 +78,7 @@ class DefaultWorkflowHandler(WorkflowHandler):
                     "- `/delete [id]` - Delete a memory by ID\n"
                 )
 
-            help_content += "\n\nJust ask me anything about your data in plain English!"
+            help_content += "\n\nAsk me any question in plain English or Marathi (मराठी)!"
 
             return WorkflowResult(
                 should_skip_llm=True,
@@ -204,83 +205,75 @@ class DefaultWorkflowHandler(WorkflowHandler):
             return self._generate_user_starter_card(analysis)
 
     def _generate_admin_starter_card(self, analysis: Dict[str, Any]) -> UiComponent:
-        """Generate admin starter card with setup info and memory management."""
+        """Generate clean, elegant PMC AI Assistant hero starter view."""
 
-        # Build concise content
         if not analysis["has_sql"]:
-            title = "Admin: Setup Required"
-            content = "**🔒 Admin View** - You have admin privileges and will see additional system information.\n\n**Vanna AI** requires a SQL connection to function.\n\nPlease configure a SQL tool to get started."
-            status = "error"
-            icon = "⚠️"
-        elif analysis["is_complete"]:
-            title = "Admin: System Ready"
-            content = "**🔒 Admin View** - You have admin privileges and will see additional system information.\n\n**Vanna AI** is fully configured and ready.\n\n"
-            content += "**Setup:** SQL ✓ | Memory ✓ | Visualization ✓"
-            status = "success"
-            icon = "✅"
-        else:
-            title = "Admin: System Ready"
-            content = "**🔒 Admin View** - You have admin privileges and will see additional system information.\n\n**Vanna AI** is ready to query your database.\n\n"
-            setup_items = []
-            setup_items.append("SQL ✓")
-            setup_items.append("Memory ✓" if analysis["has_memory"] else "Memory ✗")
-            setup_items.append("Viz ✓" if analysis["has_viz"] else "Viz ✗")
-            content += f"**Setup:** {' | '.join(setup_items)}"
-            status = "warning" if not analysis["has_memory"] else "success"
-            icon = "⚠️" if not analysis["has_memory"] else "✅"
-
-        # Add memory management info for admins
-        actions: List[Dict[str, Any]] = []
-        if analysis["has_sql"]:
-            actions.append(
-                {
-                    "label": "💡 Help",
-                    "action": "/help",
-                    "variant": "secondary",
-                }
+            content = (
+                "<div class='pmc-hero-card'>"
+                "  <div class='pmc-hero-header'>"
+                "    <span class='pmc-logo-badge'>⚠️</span>"
+                "    <div>"
+                "      <h3 style='margin:0; font-size:1.15rem; color:#b91c1c;'>Setup Required</h3>"
+                "      <p style='margin:4px 0 0 0; color:#64748b; font-size:0.88rem;'>PMC AI Assistant requires a database connection to function.</p>"
+                "    </div>"
+                "  </div>"
+                "</div>"
             )
-
-        if analysis["has_memory"]:
-            content += "\n\n**Memory Management:** Tool and text memories are available. As an admin, you can view and manage these memories to help me learn from successful queries."
-            actions.append(
-                {
-                    "label": "🧠 View Memories",
-                    "action": "/memories",
-                    "variant": "secondary",
-                }
+        else:
+            content = (
+                "<div class='pmc-hero-card'>"
+                "  <div class='pmc-hero-header'>"
+                "    <span class='pmc-logo-badge'>🏛️</span>"
+                "    <div class='pmc-hero-titles'>"
+                "      <h2 class='pmc-hero-title'>PMC AI Assistant</h2>"
+                "      <p class='pmc-hero-subtitle'>पुणे महानगरपालिका AI सहाय्यक</p>"
+                "    </div>"
+                "  </div>"
+                "  <p class='pmc-hero-desc'>"
+                "    Welcome! I can assist you with real-time statistical insights, citizen complaint analytics, and department status for Pune Municipal Corporation."
+                "  </p>"
+                "  <div class='pmc-suggestions-label'>💡 Suggested Queries / काय विचारू शकता:</div>"
+                "  <div class='pmc-suggestion-grid'>"
+                "    <button class='pmc-suggestion-chip' data-query='Show total complaints count till now'>"
+                "      <span class='chip-icon'>📈</span>"
+                "      <div class='chip-text'>"
+                "        <strong>Show total complaints count till now</strong>"
+                "        <small>एकूण तक्रारींची संख्या</small>"
+                "      </div>"
+                "    </button>"
+                "    <button class='pmc-suggestion-chip' data-query='Show complaints breakdown by status'>"
+                "      <span class='chip-icon'>📊</span>"
+                "      <div class='chip-text'>"
+                "        <strong>Show complaints breakdown by status</strong>"
+                "        <small>तक्रार स्थितीनुसार वर्गीकरण</small>"
+                "      </div>"
+                "    </button>"
+                "    <button class='pmc-suggestion-chip' data-query='Which department received the highest complaints?'>"
+                "      <span class='chip-icon'>🏢</span>"
+                "      <div class='chip-text'>"
+                "        <strong>Which department received the highest complaints?</strong>"
+                "        <small>विभागानुसार तक्रारींचे विश्लेषण</small>"
+                "      </div>"
+                "    </button>"
+                "    <button class='pmc-suggestion-chip' data-query='Show recent complaint resolution details'>"
+                "      <span class='chip-icon'>✅</span>"
+                "      <div class='chip-text'>"
+                "        <strong>Show recent complaint resolution details</strong>"
+                "        <small>अलीकडील तक्रारींचे निवारण</small>"
+                "      </div>"
+                "    </button>"
+                "  </div>"
+                "</div>"
             )
 
         return UiComponent(
-            rich_component=CardComponent(
-                title=title,
-                content=content,
-                icon=icon,
-                status=status,
-                actions=actions,
-                markdown=True,
-            ),
+            rich_component=RichTextComponent(content=content, markdown=False),
             simple_component=None,
         )
 
     def _generate_user_starter_card(self, analysis: Dict[str, Any]) -> UiComponent:
-        """Generate simple user starter view using RichTextComponent."""
-
-        if not analysis["has_sql"]:
-            content = (
-                "# ⚠️ Setup Required\n\n"
-                "Vanna AI requires configuration before it can help you analyze data."
-            )
-        else:
-            content = (
-                "# 👋 Welcome to Vanna AI\n\n"
-                "I'm your AI data analyst assistant. Ask me anything about your data in plain English!\n\n"
-                "Type `/help` to see what I can do."
-            )
-
-        return UiComponent(
-            rich_component=RichTextComponent(content=content, markdown=True),
-            simple_component=None,
-        )
+        """Generate clean PMC AI Assistant starter view."""
+        return self._generate_admin_starter_card(analysis)
 
     def _analyze_setup(self, tool_names: List[str]) -> Dict[str, Any]:
         """Analyze the current tool setup and return status."""

@@ -24,7 +24,7 @@ from vanna.tools.agent_memory import (
 )
 from vanna.servers.fastapi import VannaFastAPIServer
 from vanna.integrations.openai import OpenAILlmService
-from vanna.integrations.postgres import PostgresRunner
+from vanna.integrations.postgres import PostgresRunner, PostgresConversationStore
 from vanna.integrations.local.agent_memory import DemoAgentMemory
 from vanna.core.filter import ContextWindowFilter
 
@@ -59,6 +59,14 @@ DATABASE_URL = RAW_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"
 db_tool = RunSqlTool(
     sql_runner=PostgresRunner(connection_string=DATABASE_URL)
 )
+
+# 2b. Configure Metadata Database Connection for Conversations & Logging
+METADATA_DATABASE_URL = os.getenv(
+    "METADATA_DATABASE_URL",
+    "postgresql://postgres:postgres_password@localhost:5433/pmc_metadata_db",
+)
+conversation_store = PostgresConversationStore(connection_string=METADATA_DATABASE_URL)
+
 
 # Schema Cache Helper
 _schema_cache = None
@@ -355,7 +363,7 @@ tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=["admi
 tools.register_local_tool(SaveTextMemoryTool(), access_groups=["admin", "user"])
 tools.register_local_tool(VisualizeDataTool(), access_groups=["admin", "user"])
 
-# 7. Create Global Agent Instance
+# 7. Create Global Agent Instance (Storage is handled explicitly via PmcMetadataLogger)
 vanna_agent = Agent(
     llm_service=llm,
     tool_registry=tools,
@@ -364,6 +372,8 @@ vanna_agent = Agent(
     system_prompt_builder=PmcSchemaSystemPromptBuilder(),
     conversation_filters=[ContextWindowFilter(max_questions=5)],
 )
+
+
 
 # Alias for backwards compatibility
 agent = vanna_agent
