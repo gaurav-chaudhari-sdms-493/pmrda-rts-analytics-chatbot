@@ -4,13 +4,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Trap signals to cleanly terminate both processes on exit / Ctrl+C
+# Trap signals to cleanly terminate both processes on Ctrl+C / SIGTERM
 cleanup() {
     echo ""
     echo "Stopping all Vanna services..."
     kill $(jobs -p) 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup INT TERM
 
 # 1. Determine Python binary
 if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
@@ -28,6 +28,22 @@ fi
 echo "=================================================="
 echo "⚡ Starting Vanna Agent Stack (Backend & Frontend)"
 echo "=================================================="
+
+# 0. Close existing running services on ports 8000 & 5173, main.py, and vite
+echo "Closing existing running services if any..."
+if command -v fuser >/dev/null 2>&1; then
+    fuser -k 8000/tcp 2>/dev/null || true
+    fuser -k 5173/tcp 2>/dev/null || true
+fi
+if command -v lsof >/dev/null 2>&1; then
+    PIDS=$(lsof -t -i:8000 -i:5173 2>/dev/null || true)
+    if [ -n "$PIDS" ]; then
+        kill -9 $PIDS 2>/dev/null || true
+    fi
+fi
+pkill -f "main.py" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
+sleep 1
 
 # 2. Start FastAPI Backend (Port 8000)
 echo "[1/2] Starting FastAPI Backend on http://0.0.0.0:8000..."
