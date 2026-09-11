@@ -202,17 +202,34 @@ async def export_grid_data(
             }
         )
     elif format.lower() in ["excel", "xlsx"]:
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-            filtered_df.to_excel(writer, index=False, sheet_name="Data")
-        excel_buffer.seek(0)
-        return StreamingResponse(
-            excel_buffer,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{base_name}_export.xlsx"'
-            }
-        )
+        try:
+            from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+            excel_df = filtered_df.copy()
+            for col in excel_df.select_dtypes(include=['object', 'string']).columns:
+                excel_df[col] = excel_df[col].apply(
+                    lambda x: ILLEGAL_CHARACTERS_RE.sub('', str(x)) if isinstance(x, str) else x
+                )
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                excel_df.to_excel(writer, index=False, sheet_name="Data")
+            excel_buffer.seek(0)
+            return StreamingResponse(
+                excel_buffer,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{base_name}_export.xlsx"'
+                }
+            )
+        except ImportError:
+            raise HTTPException(
+                status_code=500,
+                detail="Excel export requires the 'openpyxl' library. Please install openpyxl."
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to generate Excel file: {str(e)}"
+            )
     elif format.lower() == "pdf":
         columns = list(filtered_df.columns)
         records = filtered_df.head(1000).where(pd.notnull(filtered_df), "").to_dict(orient="records")

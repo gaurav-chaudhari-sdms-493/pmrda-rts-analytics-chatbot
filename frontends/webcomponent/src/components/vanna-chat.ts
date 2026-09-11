@@ -774,7 +774,11 @@ export class VannaChat extends LitElement {
 
     try {
       const stream = this.apiClient.streamChat(request);
+      const chunks: ChatStreamChunk[] = [];
       for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      for (const chunk of chunks) {
         await this.processChunk(chunk);
       }
     } catch (error) {
