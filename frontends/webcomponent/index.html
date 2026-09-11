@@ -37,6 +37,55 @@
             height: 100%;
             display: block;
         }
+
+        /* Plotly Interactivity & Floating Glass Modebar */
+        .plotly .modebar-container {
+            position: absolute !important;
+            top: 8px !important;
+            right: 12px !important;
+            left: auto !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(4px) !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 8px !important;
+            padding: 2px 4px !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+            z-index: 1000 !important;
+        }
+
+        .plotly .modebar {
+            background: transparent !important;
+            border: none !important;
+            display: flex !important;
+            flex-direction: row !important;
+            gap: 2px !important;
+        }
+
+        .plotly .modebar-btn {
+            background: transparent !important;
+            border: none !important;
+            opacity: 0.7 !important;
+            padding: 4px 6px !important;
+            border-radius: 4px !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+
+        .plotly .modebar-btn:hover {
+            opacity: 1 !important;
+            background: #f3f4f6 !important;
+        }
+
+        .plotly .modebar-btn path {
+            fill: #374151 !important;
+        }
+
+        .plotly-div .point,
+        .plotly-div .bar,
+        .plotly-div .slice,
+        .plotly-div .traces {
+            cursor: pointer !important;
+        }
     </style>
 </head>
 <body>

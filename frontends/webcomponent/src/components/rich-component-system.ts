@@ -547,7 +547,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       if (!rows || rows.length === 0 || !cols || cols.length === 0) {
         chartElement.data = [];
-        chartElement.layout = { title: 'No Data Available' };
+        chartElement.layout = { title: { text: 'No Data Available', font: { size: 14 } } };
         return;
       }
 
@@ -556,46 +556,76 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       // Identify date column
       const dateCol = cols.find((c: string) => {
         const lower = String(c).toLowerCase();
-        return ['date', 'time', 'created_at', 'timestamp', 'updated_at'].some((kw: string) => lower.includes(kw));
+        return ['date', 'time', 'created_at', 'timestamp', 'updated_at', 'year', 'month', 'day'].some((kw: string) => lower.includes(kw));
       });
 
-      // Identify numeric columns
+      // Filter non-metric numeric columns (IDs, zip codes, coordinates, status codes)
+      const nonMetricKeywords = ['id', 'index', 'row_id', 'complaint_number', 'sr_no', 'ward_id', 'zone_id', 'pincode', 'zip', 'zipcode', 'mobile', 'phone', 'lat', 'latitude', 'lng', 'longitude', 'status_code', 'dept_id'];
       const numCols = cols.filter((c: string) => {
-        const val = sampleRow[c];
         const lower = String(c).toLowerCase();
-        if (['id', 'index', 'row_id', 'complaint_number'].includes(lower)) return false;
+        if (nonMetricKeywords.some(kw => lower.includes(kw))) return false;
+        const val = sampleRow[c];
         return typeof val === 'number' || (!isNaN(Number(val)) && val !== '' && val !== null);
       });
 
-      // Identify categorical column
+      // Identify categorical column (e.g., Ward Name, Category, Status, Department)
       const catCol = cols.find((c: string) => {
         const lower = String(c).toLowerCase();
-        if (['id', 'index', 'row_id', 'complaint_number'].includes(lower)) return false;
+        if (nonMetricKeywords.some(kw => lower.includes(kw))) return false;
         return c !== dateCol && !numCols.includes(c);
       }) || dateCol || cols[0];
 
       let plotlyTraces: any[] = [];
+      const palette = ['#0969da', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6', '#10b981'];
+
       let plotlyLayout: any = {
         autosize: true,
-        margin: { t: 40, r: 30, b: 60, l: 60 },
-        font: { family: 'system-ui, -apple-system, sans-serif' },
+        margin: { t: 55, r: 25, b: 75, l: 60 },
+        font: { family: 'Inter, system-ui, sans-serif', color: '#374151', size: 11 },
         paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent'
+        plot_bgcolor: 'transparent',
+        hovermode: 'closest',
+        hoverlabel: {
+          bgcolor: '#1f2937',
+          bordercolor: '#1f2937',
+          font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#ffffff' },
+          align: 'left'
+        },
+        showlegend: true,
+        legend: {
+          orientation: 'h',
+          y: 1.15,
+          x: 0.5,
+          xanchor: 'center',
+          font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#374151' }
+        },
+        xaxis: {
+          automargin: true,
+          tickangle: -45,
+          tickfont: { size: 10, color: '#4b5563' },
+          gridcolor: 'rgba(229, 231, 235, 0.7)',
+          zeroline: false
+        },
+        yaxis: {
+          automargin: true,
+          tickfont: { size: 11, color: '#4b5563' },
+          gridcolor: 'rgba(229, 231, 235, 0.7)',
+          zerolinecolor: 'rgba(209, 213, 219, 0.8)'
+        }
       };
 
-      const palette = ['#15a8a8', '#fe5d26', '#bf1363', '#023d60'];
-
       if (viewType === 'bar') {
-        plotlyLayout.title = `${title || 'Data Analysis'} - Bar Chart`;
         if (catCol && numCols.length > 0) {
           const topRows = rows.slice(0, 20);
           const xVals = topRows.map((r: any) => r[catCol]);
-          plotlyTraces = numCols.slice(0, 4).map((nc: string, idx: number) => ({
+          plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
             name: nc,
             type: 'bar',
-            marker: { color: palette[idx % palette.length] }
+            showlegend: true,
+            marker: { color: palette[idx % palette.length], opacity: 0.9 },
+            hovertemplate: '<b>%{x}</b><br>' + nc + ': <b>%{y:,.0f}</b><extra></extra>'
           }));
           plotlyLayout.barmode = numCols.length > 1 ? 'group' : 'stack';
         } else if (catCol) {
@@ -604,54 +634,139 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
           plotlyTraces = [{
             x: sorted.map(e => e[0]),
             y: sorted.map(e => e[1]),
             type: 'bar',
-            marker: { color: '#fe5d26' }
+            name: catCol,
+            showlegend: true,
+            marker: { color: palette[0], opacity: 0.9 },
+            hovertemplate: '<b>%{x}</b><br>Total Complaints: <b>%{y:,.0f}</b><extra></extra>'
           }];
         }
       } else if (viewType === 'line') {
-        plotlyLayout.title = `${title || 'Data Analysis'} - Trend Graph`;
-        const timeCol = dateCol || catCol;
-        const topRows = rows.slice(0, 50);
-        const xVals = topRows.map((r: any) => r[timeCol]);
+        if (dateCol && numCols.length > 0) {
+          const valCol = numCols[0];
+          const aggregated: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            let d = r[dateCol];
+            if (d) {
+              const strVal = String(d).split('T')[0].split(' ')[0];
+              const v = Number(r[valCol]) || 0;
+              aggregated[strVal] = (aggregated[strVal] || 0) + v;
+            }
+          });
+          const sortedEntries = Object.entries(aggregated).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 50);
 
-        if (numCols.length > 0) {
-          plotlyTraces = numCols.slice(0, 4).map((nc: string, idx: number) => ({
+          plotlyTraces = [{
+            x: sortedEntries.map(e => e[0]),
+            y: sortedEntries.map(e => e[1]),
+            mode: 'lines+markers',
+            type: 'scatter',
+            name: valCol,
+            showlegend: true,
+            line: { shape: 'spline', width: 3, color: palette[0] },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(9, 105, 218, 0.08)',
+            marker: { size: 7, color: palette[0] },
+            hovertemplate: `<b>%{x}</b><br>${valCol}: <b>%{y:,.0f}</b><extra></extra>`
+          }];
+        } else if (dateCol) {
+          // Time-series trend: group and sort by date ascending
+          const freqMap: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            let val = r[dateCol];
+            if (val) {
+              const strVal = String(val).split('T')[0].split(' ')[0];
+              freqMap[strVal] = (freqMap[strVal] || 0) + 1;
+            }
+          });
+          const sortedEntries = Object.entries(freqMap).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 50);
+
+          plotlyTraces = [{
+            x: sortedEntries.map(e => e[0]),
+            y: sortedEntries.map(e => e[1]),
+            mode: 'lines+markers',
+            type: 'scatter',
+            name: 'Complaints Over Time',
+            showlegend: true,
+            line: { shape: 'spline', width: 3, color: palette[0] },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(9, 105, 218, 0.08)',
+            marker: { size: 7, color: palette[0] },
+            hovertemplate: '<b>%{x}</b><br>Complaints: <b>%{y:,.0f}</b><extra></extra>'
+          }];
+        } else if (catCol && numCols.length > 0) {
+          const topRows = rows.slice(0, 20);
+          const xVals = topRows.map((r: any) => r[catCol]);
+          plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
             name: nc,
+            showlegend: true,
             mode: 'lines+markers',
             type: 'scatter',
-            line: { color: palette[idx % palette.length] }
+            line: { shape: 'spline', width: 3, color: palette[idx % palette.length] },
+            fill: idx === 0 ? 'tozeroy' : undefined,
+            fillcolor: idx === 0 ? 'rgba(9, 105, 218, 0.08)' : undefined,
+            marker: { size: 7, color: palette[idx % palette.length] },
+            hovertemplate: '<b>%{x}</b><br>' + nc + ': <b>%{y:,.0f}</b><extra></extra>'
           }));
-        } else {
+        } else if (catCol) {
+          // Categorical aggregation sorted by count/value
           const freqMap: Record<string, number> = {};
           rows.forEach((r: any) => {
-            const k = String(r[timeCol] ?? 'N/A');
+            const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const entries = Object.entries(freqMap);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
           plotlyTraces = [{
-            x: entries.map(e => e[0]),
-            y: entries.map(e => e[1]),
+            x: sorted.map(e => e[0]),
+            y: sorted.map(e => e[1]),
             mode: 'lines+markers',
             type: 'scatter',
-            line: { color: '#15a8a8' }
+            name: catCol,
+            showlegend: true,
+            line: { shape: 'spline', width: 3, color: palette[0] },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(9, 105, 218, 0.08)',
+            marker: { size: 8, color: palette[0] },
+            hovertemplate: '<b>%{x}</b><br>Complaints: <b>%{y:,.0f}</b><extra></extra>'
           }];
         }
       } else if (viewType === 'pie') {
-        plotlyLayout.title = `${title || 'Data Analysis'} - Pie Chart`;
+        plotlyLayout.margin = { t: 25, r: 25, b: 25, l: 25 };
+        plotlyLayout.showlegend = true;
+        plotlyLayout.legend = {
+          orientation: 'v',
+          x: 0.68,
+          y: 0.5,
+          xanchor: 'left',
+          yanchor: 'middle',
+          font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#374151' }
+        };
+
         if (catCol && numCols.length > 0) {
-          const topRows = rows.slice(0, 10);
+          const valCol = numCols[0];
+          const aggregated: Record<string, number> = {};
+          rows.forEach((r: any) => {
+            const k = String(r[catCol] ?? 'N/A');
+            const v = Number(r[valCol]) || 0;
+            aggregated[k] = (aggregated[k] || 0) + v;
+          });
+          const sorted = Object.entries(aggregated).sort((a, b) => b[1] - a[1]).slice(0, 10);
           plotlyTraces = [{
-            labels: topRows.map((r: any) => r[catCol]),
-            values: topRows.map((r: any) => Number(r[numCols[0]]) || 0),
+            labels: sorted.map(e => e[0]),
+            values: sorted.map(e => e[1]),
             type: 'pie',
-            hole: 0.3,
-            textinfo: 'label+percent'
+            hole: 0.45,
+            domain: { x: [0, 0.64] },
+            showlegend: true,
+            textinfo: 'percent',
+            textposition: 'inside',
+            marker: { colors: palette, line: { color: '#ffffff', width: 2 } },
+            hovertemplate: `<b>%{label}</b><br>${valCol}: <b>%{value:,.0f}</b> (%{percent})<extra></extra>`
           }];
         } else if (catCol) {
           const freqMap: Record<string, number> = {};
@@ -664,14 +779,36 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             labels: sorted.map(e => e[0]),
             values: sorted.map(e => e[1]),
             type: 'pie',
-            hole: 0.3,
-            textinfo: 'label+percent'
+            hole: 0.45,
+            domain: { x: [0, 0.64] },
+            showlegend: true,
+            textinfo: 'percent',
+            textposition: 'inside',
+            marker: { colors: palette, line: { color: '#ffffff', width: 2 } },
+            hovertemplate: '<b>%{label}</b><br>Count: <b>%{value:,.0f}</b> (%{percent})<extra></extra>'
           }];
         }
       }
 
       chartElement.data = plotlyTraces;
       chartElement.layout = plotlyLayout;
+
+      // Enable interactive click-to-filter on chart elements
+      if (!chartElement._hasClickListener) {
+        chartElement._hasClickListener = true;
+        chartElement.addEventListener('chart-click', (evt: CustomEvent) => {
+          const clickedLabel = evt.detail?.label;
+          if (clickedLabel) {
+            const searchInput = container.querySelector('.grid-search-input') as HTMLInputElement;
+            if (searchInput) {
+              searchInput.value = String(clickedLabel);
+            }
+            state.globalSearch = String(clickedLabel);
+            state.currentPage = 1;
+            fetchServerData();
+          }
+        });
+      }
     };
 
     // Server-side data fetcher
@@ -1019,7 +1156,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           ${tableHTML}
           ${paginationHTML}
         </div>
-        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'};">
+        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'}; overflow: hidden;">
           <plotly-chart></plotly-chart>
         </div>
       `;
@@ -2269,7 +2406,9 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
       // Set theme to match current theme
       const vannaChat = document.querySelector('vanna-chat');
       if (vannaChat) {
-        chartElement.theme = vannaChat.getAttribute('theme') || 'dark';
+        chartElement.theme = vannaChat.getAttribute('theme') || 'light';
+      } else {
+        chartElement.theme = 'light';
       }
 
       // Wrap in container with optional title

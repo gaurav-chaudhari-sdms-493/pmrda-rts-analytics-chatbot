@@ -1,6 +1,5 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { vannaDesignTokens } from '../styles/vanna-design-tokens.js';
 import Plotly from 'plotly.js-dist-min';
 
 export interface PlotlyData {
@@ -31,88 +30,24 @@ export interface PlotlyLayout {
 
 @customElement('plotly-chart')
 export class PlotlyChart extends LitElement {
-  static styles = [
-    vannaDesignTokens,
-    css`
-      :host {
-        display: block;
-        font-family: var(--vanna-font-family-default);
-        width: 100%;
-        height: 100%;
-      }
-
-      .plotly-div {
-        width: 100%;
-        min-height: 400px;
-      }
-
-      /* Plotly layering fix for Shadow DOM */
-      .plotly-div,
-      .plotly-div .js-plotly-plot,
-      .plotly-div .plot-container,
-      .plotly-div .svg-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-      }
-
-      .plotly-div svg.main-svg {
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-
-      .plotly-div .hoverlayer {
-        pointer-events: none;
-      }
-
-      .chart-export-toolbar {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        background: rgba(255, 255, 255, 0.04);
-        border-bottom: 1px solid var(--vanna-outline-dimmer, rgba(255, 255, 255, 0.1));
-        margin-bottom: 4px;
-      }
-
-      .chart-export-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 8px;
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--vanna-foreground-default, #e1e4e8);
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid var(--vanna-outline-default, rgba(255, 255, 255, 0.15));
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .chart-export-btn:hover {
-        background: rgba(255, 255, 255, 0.16);
-        border-color: var(--vanna-accent-primary-default, #0969da);
-        color: #ffffff;
-      }
-    `
-  ];
+  // Render into Light DOM so native browser mouse/hover/scroll/drag/click events work 100% with Plotly
+  createRenderRoot() {
+    return this;
+  }
 
   @property({ type: Array }) data: PlotlyData[] = [];
   @property({ type: Object }) layout: PlotlyLayout = {};
   @property({ type: Object }) config = {};
   @property({ type: Boolean }) loading = false;
   @property() error = '';
-  @property() theme: 'light' | 'dark' = 'dark';
+  @property() theme: 'light' | 'dark' = 'light';
   @property({ type: Boolean }) showExportButtons = true;
 
   private plotlyDiv?: HTMLElement;
   private resizeObserver?: ResizeObserver;
 
   firstUpdated() {
-    this.plotlyDiv = this.shadowRoot?.querySelector('.plotly-div') as HTMLElement;
+    this.plotlyDiv = this.querySelector('.plotly-div') as HTMLElement;
     this._renderChart();
     this._setupResizeObserver();
   }
@@ -147,19 +82,25 @@ export class PlotlyChart extends LitElement {
     const mergedLayout = {
       ...this.layout,
       font: this.layout.font || {
-        family: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: isDark ? 'rgb(242, 244, 247)' : 'rgb(17, 24, 39)',
+        family: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: isDark ? 'rgb(242, 244, 247)' : 'rgb(55, 65, 81)',
         size: 12
       },
-      modebar: this.layout.modebar || {
-        bgcolor: isDark ? 'rgba(21, 26, 38, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-        color: isDark ? 'rgb(177, 186, 196)' : 'rgb(75, 85, 99)',
-        activecolor: isDark ? 'rgb(242, 244, 247)' : 'rgb(17, 24, 39)',
-        orientation: 'h'
+      hoverlabel: this.layout.hoverlabel || {
+        bgcolor: '#111827',
+        bordercolor: '#111827',
+        font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#ffffff' },
+        align: 'left',
+        namelength: -1
       },
-      autosize: false,
+      modebar: {
+        bgcolor: 'transparent',
+        color: '#4b5563',
+        activecolor: '#0969da'
+      },
+      autosize: true,
       width: this.layout.width || undefined,
-      height: this.layout.height || 400,
+      height: this.layout.height || 420,
     };
 
     if (!this.layout.paper_bgcolor) {
@@ -175,8 +116,11 @@ export class PlotlyChart extends LitElement {
   private _getDefaultConfig() {
     return {
       responsive: true,
-      displayModeBar: true,
+      displayModeBar: false as const,
       displaylogo: false,
+      scrollZoom: true,
+      doubleClick: 'reset' as const,
+      modeBarButtonsToRemove: ['sendDataToCloud'] as any,
       toImageButtonOptions: {
         format: 'png' as const,
         filename: 'chart_export',
@@ -217,7 +161,6 @@ export class PlotlyChart extends LitElement {
       const rows: string[] = [];
       const traces = this.data;
 
-      // Extract traces data into CSV format
       if (traces.length === 1 && (traces[0].labels || traces[0].x)) {
         const trace = traces[0];
         if (trace.type === 'pie' && trace.labels && trace.values) {
@@ -234,7 +177,6 @@ export class PlotlyChart extends LitElement {
           }
         }
       } else {
-        // Multi-trace dataset
         const traceNames = traces.map((t, idx) => t.name || `Series ${idx + 1}`);
         rows.push(`"X",${traceNames.map(n => `"${n.replace(/"/g, '""')}"`).join(',')}`);
         const refTrace = traces[0];
@@ -266,7 +208,26 @@ export class PlotlyChart extends LitElement {
       const layout = this._getDefaultLayout();
       const config = this._getDefaultConfig();
 
-      await Plotly.newPlot(this.plotlyDiv, this.data, layout, config);
+      await Plotly.react(this.plotlyDiv, this.data, layout, config);
+
+      const chartDiv = this.plotlyDiv as any;
+
+      if (!chartDiv._hasListenersAttached) {
+        chartDiv._hasListenersAttached = true;
+
+        chartDiv.on('plotly_click', (eventData: any) => {
+          if (eventData && eventData.points && eventData.points.length > 0) {
+            const pt = eventData.points[0];
+            const label = pt.x ?? pt.label ?? pt.category;
+            const value = pt.y ?? pt.value;
+            this.dispatchEvent(new CustomEvent('chart-click', {
+              detail: { point: pt, label, value, traceName: pt.data?.name },
+              bubbles: true,
+              composed: true
+            }));
+          }
+        });
+      }
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Failed to render chart';
       console.error('Plotly chart error:', err);
@@ -281,19 +242,19 @@ export class PlotlyChart extends LitElement {
         <div class="error-message">Error: ${this.error}</div>
       ` : html`
         ${this.showExportButtons && this.data.length > 0 ? html`
-          <div class="chart-export-toolbar">
-            <button class="chart-export-btn" @click=${() => this.downloadPNG()} title="Download chart as PNG image">
+          <div class="chart-export-toolbar" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 6px 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px;">
+            <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.downloadPNG()} title="Download chart as PNG image">
               📷 Export PNG
             </button>
-            <button class="chart-export-btn" @click=${() => this.downloadSVG()} title="Download vector SVG chart">
+            <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.downloadSVG()} title="Download vector SVG chart">
               📄 Export SVG
             </button>
-            <button class="chart-export-btn" @click=${() => this.exportDataCSV()} title="Export chart dataset to CSV">
+            <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.exportDataCSV()} title="Export chart dataset to CSV">
               📊 Export CSV
             </button>
           </div>
         ` : ''}
-        <div class="plotly-div"></div>
+        <div class="plotly-div" style="width: 100%; min-height: 400px; position: relative;"></div>
       `}
     `;
   }

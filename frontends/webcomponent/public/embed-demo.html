@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host Portal - Embedded PMC Chatbot Widget Demo</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 40px;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+    h1 { color: #1e3a8a; margin-top: 0; }
+    p { line-height: 1.6; color: #475569; }
+    .badge {
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    code {
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 14px;
+      border-radius: 10px;
+      display: block;
+      overflow-x: auto;
+      font-family: monospace;
+      font-size: 13px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">External Website / Portal Integration</span>
+    <h1>Pune Municipal Corporation - Host Website</h1>
+    <p>
+      This demo page simulates an external portal (e.g. Pune Municipal Corporation public portal, grievance portal, or external web app) hosting the <strong>PMC Officer AI Assistant Chatbot Widget</strong>.
+    </p>
+
+    <h3>Embed Code Snippet for Third-Party Websites:</h3>
+    <code>
+&lt;!-- Embed PMC Officer Assistant Side Widget --&gt;<br>
+&lt;iframe<br>
+&nbsp;&nbsp;src="http://localhost:5173/?embed=true"<br>
+&nbsp;&nbsp;style="position: fixed; bottom: 0; right: 0; width: 100vw; height: 100vh; border: none; z-index: 99999; pointer-events: none;"<br>
+&nbsp;&nbsp;allow="clipboard-write"<br>
+&gt;&lt;/iframe&gt;
+    </code>
+
+    <p style="margin-top: 30px; font-weight: 600; color: #0284c7;">
+      👉 Look at the bottom right corner of your screen! Click the floating <strong>PMC Chat Launcher Circle</strong> to test the Side Widget, Fullscreen Mode, and Quick Suggestions.
+    </p>
+  </div>
+
+  <!-- Embedded Chatbot Widget Overlay -->
+  <iframe
+    src="http://localhost:5173/?embed=true"
+    style="position: fixed; bottom: 0; right: 0; width: 100vw; height: 100vh; border: none; z-index: 99999; pointer-events: auto;"
+    title="PMC Officer Assistant Chatbot Widget"
+  ></iframe>
+</body>
+</html>
