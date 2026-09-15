@@ -146,6 +146,22 @@ export class VannaMessage extends LitElement {
         background-color: #f8fafc;
       }
 
+      .message-content ul, .message-content ol {
+        margin: 6px 0 10px 22px;
+        padding: 0;
+      }
+
+      .message-content li {
+        margin-bottom: 4px;
+        line-height: 1.5;
+      }
+
+      .message-content h3, .message-content h4, .message-content h5 {
+        margin: 12px 0 6px 0;
+        font-weight: 600;
+        color: #0d0d0d;
+      }
+
       .message-timestamp {
         font-size: 11px;
         color: #8e8e8e;
@@ -173,6 +189,10 @@ export class VannaMessage extends LitElement {
   private renderMarkdown(text: string): string {
     if (!text) return '';
     let str = text.replace(/\r\n/g, '\n');
+
+    // Preprocess inline list items onto separate lines if collapsed (e.g., "1. A 2. B" -> "1. A\n2. B")
+    str = str.replace(/(\S)\s+(\d+[\.\)])\s+/g, '$1\n$2 ');
+    str = str.replace(/(\S)\s+([\-\*])\s+([A-Z0-9])/g, '$1\n$2 $3');
 
     // Fix blank lines between markdown table rows
     while (/(^\|[^\n]+\|\s*\n)\s*\n+(?=\|[^\n]+\|)/m.test(str)) {
@@ -238,10 +258,35 @@ export class VannaMessage extends LitElement {
       if (block.startsWith('# ')) return `<h3>${formatInline(block.substring(2))}</h3>`;
       if (block.startsWith('## ')) return `<h4>${formatInline(block.substring(3))}</h4>`;
       if (block.startsWith('### ')) return `<h5>${formatInline(block.substring(4))}</h5>`;
-      if (block.startsWith('- ') || block.startsWith('* ')) {
-        const items = block.split('\n').map(item => `<li>${formatInline(item.replace(/^[-*]\s+/, ''))}</li>`).join('');
+
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+      // Unordered list block
+      if (lines.length > 0 && lines.every(l => /^[-*]\s+/.test(l))) {
+        const items = lines.map(l => `<li>${formatInline(l.replace(/^[-*]\s+/, ''))}</li>`).join('');
         return `<ul>${items}</ul>`;
       }
+
+      // Ordered / Numbered list block
+      if (lines.length > 0 && lines.every(l => /^\d+[\.\)]\s+/.test(l))) {
+        const items = lines.map(l => `<li>${formatInline(l.replace(/^\d+[\.\)]\s+/, ''))}</li>`).join('');
+        return `<ol>${items}</ol>`;
+      }
+
+      // Mixed lines inside paragraph (some list items, some normal text)
+      if (lines.some(l => /^[-*]\s+/.test(l) || /^\d+[\.\)]\s+/.test(l))) {
+        const parsedLines = lines.map(l => {
+          if (/^[-*]\s+/.test(l)) {
+            return `<ul><li>${formatInline(l.replace(/^[-*]\s+/, ''))}</li></ul>`;
+          }
+          if (/^\d+[\.\)]\s+/.test(l)) {
+            return `<ol><li>${formatInline(l.replace(/^\d+[\.\)]\s+/, ''))}</li></ol>`;
+          }
+          return formatInline(l);
+        }).join('<br/>');
+        return `<p>${parsedLines}</p>`;
+      }
+
       return `<p>${formatInline(block).replace(/\n/g, '<br/>')}</p>`;
     });
 

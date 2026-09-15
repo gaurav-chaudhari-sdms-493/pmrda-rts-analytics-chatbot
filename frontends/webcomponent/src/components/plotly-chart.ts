@@ -1,5 +1,7 @@
 import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { jsPDF } from 'jspdf';
+import { svg2pdf } from 'svg2pdf.js';
 import {
   Chart,
   CategoryScale,
@@ -477,8 +479,258 @@ export class PlotlyChart extends LitElement {
     }
   }
 
+  public generatePureVectorSVG(_filename = 'chart'): string {
+    const width = 1000;
+    const height = 600;
+    const palette = ['#0969da', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6', '#14b8a6'];
+
+    const escapeXml = (str: any) => String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+    const titleText = typeof this.layout?.title === 'string'
+      ? this.layout.title
+      : (this.layout?.title?.text || 'Chart');
+
+    const traces = Array.isArray(this.data) ? this.data : [];
+    const firstTrace = traces[0] || {};
+    const chartType = (firstTrace.type === 'pie' || firstTrace.type === 'doughnut') ? 'pie' : (firstTrace.type || 'bar');
+
+    let svgElements = '';
+
+    if (chartType === 'pie') {
+      let labels: string[] = [];
+      let values: number[] = [];
+
+      if (firstTrace.labels && firstTrace.values) {
+        labels = Array.isArray(firstTrace.labels) ? firstTrace.labels.map(String) : [];
+        values = Array.isArray(firstTrace.values) ? firstTrace.values.map(Number) : [];
+      } else if (traces.length > 1) {
+        labels = traces.map(t => String(t.name || t.x?.[0] || ''));
+        values = traces.map(t => Number(t.y?.[0] || t.values?.[0] || 0));
+      }
+
+      const total = values.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
+      const cx = 380;
+      const cy = 320;
+      const rOuter = 200;
+      const rInner = 100; // doughnut hole
+
+      let currentAngle = -Math.PI / 2;
+
+      values.forEach((val, i) => {
+        if (isNaN(val) || val <= 0 || total <= 0) return;
+        const sliceAngle = (val / total) * 2 * Math.PI;
+        const startAngle = currentAngle;
+        const endAngle = currentAngle + sliceAngle;
+        currentAngle = endAngle;
+
+        const x1Outer = cx + rOuter * Math.cos(startAngle);
+        const y1Outer = cy + rOuter * Math.sin(startAngle);
+        const x2Outer = cx + rOuter * Math.cos(endAngle);
+        const y2Outer = cy + rOuter * Math.sin(endAngle);
+
+        const x1Inner = cx + rInner * Math.cos(endAngle);
+        const y1Inner = cy + rInner * Math.sin(endAngle);
+        const x2Inner = cx + rInner * Math.cos(startAngle);
+        const y2Inner = cy + rInner * Math.sin(startAngle);
+
+        const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+        const color = palette[i % palette.length];
+
+        const pathData = `M ${x1Outer.toFixed(2)} ${y1Outer.toFixed(2)} ` +
+          `A ${rOuter} ${rOuter} 0 ${largeArcFlag} 1 ${x2Outer.toFixed(2)} ${y2Outer.toFixed(2)} ` +
+          `L ${x1Inner.toFixed(2)} ${y1Inner.toFixed(2)} ` +
+          `A ${rInner} ${rInner} 0 ${largeArcFlag} 0 ${x2Inner.toFixed(2)} ${y2Inner.toFixed(2)} Z`;
+
+        svgElements += `<path d="${pathData}" fill="${color}" stroke="#ffffff" stroke-width="2"/>\n`;
+
+        // Percentage label inside slice
+        const pct = (val / total) * 100;
+        if (pct >= 4.0) {
+          const midAngle = (startAngle + endAngle) / 2;
+          const rMid = rInner + (rOuter - rInner) * 0.55;
+          const lx = cx + rMid * Math.cos(midAngle);
+          const ly = cy + rMid * Math.sin(midAngle);
+          svgElements += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="middle" dominant-baseline="central" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="bold" fill="#ffffff">${pct.toFixed(1)}%</text>\n`;
+        }
+
+        // Legend item
+        const legendY = 120 + i * 24;
+        if (legendY < 560) {
+          const labelStr = escapeXml(labels[i] || `Item ${i + 1}`);
+          svgElements += `<rect x="680" y="${legendY}" width="14" height="14" fill="${color}" rx="3"/>\n`;
+          svgElements += `<text x="702" y="${legendY + 11}" font-family="Inter, system-ui, sans-serif" font-size="12" fill="#374151">${labelStr} (${val.toLocaleString()} - ${pct.toFixed(1)}%)</text>\n`;
+        }
+      });
+
+    } else {
+      // Bar or Line chart
+      let categories: string[] = [];
+      let numericValues: number[] = [];
+
+      if (traces.length === 1 && (firstTrace.x || firstTrace.labels)) {
+        categories = Array.isArray(firstTrace.x) ? firstTrace.x.map(String) : (Array.isArray(firstTrace.labels) ? firstTrace.labels.map(String) : []);
+        numericValues = Array.isArray(firstTrace.y) ? firstTrace.y.map(Number) : (Array.isArray(firstTrace.values) ? firstTrace.values.map(Number) : []);
+      } else if (traces.length > 1) {
+        categories = traces.map(t => String(t.name || t.x?.[0] || ''));
+        numericValues = traces.map(t => Number(t.y?.[0] || t.values?.[0] || 0));
+      }
+
+      const count = Math.min(categories.length, numericValues.length);
+      const cleanVals = numericValues.slice(0, count).map(v => isNaN(v) ? 0 : v);
+      const maxVal = Math.max(...cleanVals, 1);
+
+      const plotLeft = 90;
+      const plotRight = 960;
+      const plotTop = 70;
+      const plotBottom = 490;
+      const plotWidth = plotRight - plotLeft;
+      const plotHeight = plotBottom - plotTop;
+
+      // Draw 5 horizontal Y-axis gridlines
+      for (let step = 0; step <= 4; step++) {
+        const gridY = plotBottom - (step / 4) * plotHeight;
+        const gridVal = (step / 4) * maxVal;
+        const valStr = gridVal >= 1000 ? Math.round(gridVal).toLocaleString() : gridVal.toFixed(0);
+
+        svgElements += `<line x1="${plotLeft}" y1="${gridY.toFixed(2)}" x2="${plotRight}" y2="${gridY.toFixed(2)}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>\n`;
+        svgElements += `<text x="${plotLeft - 10}" y="${(gridY + 4).toFixed(2)}" text-anchor="end" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#6b7280">${valStr}</text>\n`;
+      }
+
+      // X-axis baseline
+      svgElements += `<line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="#9ca3af" stroke-width="1.5"/>\n`;
+
+      // Y-axis title
+      const yAxisTitle = escapeXml(this.layout?.yaxis?.title?.text || this.layout?.yaxis?.title || 'Values');
+      svgElements += `<text x="25" y="${(plotTop + plotHeight / 2).toFixed(2)}" text-anchor="middle" transform="rotate(-90 25 ${(plotTop + plotHeight / 2).toFixed(2)})" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600" fill="#374151">${yAxisTitle}</text>\n`;
+
+      // X-axis title
+      const xAxisTitle = escapeXml(this.layout?.xaxis?.title?.text || this.layout?.xaxis?.title || 'Categories');
+      svgElements += `<text x="${(plotLeft + plotWidth / 2).toFixed(2)}" y="585" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600" fill="#374151">${xAxisTitle}</text>\n`;
+
+      if (count > 0) {
+        const groupWidth = plotWidth / count;
+        const barWidth = Math.max(3, Math.min(36, groupWidth * 0.72));
+
+        if (chartType === 'line') {
+          // Pure Vector Line Chart
+          let pointsAttr = '';
+          cleanVals.forEach((val, i) => {
+            const px = plotLeft + i * groupWidth + groupWidth / 2;
+            const py = plotBottom - (val / maxVal) * plotHeight;
+            pointsAttr += `${px.toFixed(2)},${py.toFixed(2)} `;
+            svgElements += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="4" fill="#0969da" stroke="#ffffff" stroke-width="1.5"/>\n`;
+          });
+          svgElements += `<polyline points="${pointsAttr.trim()}" fill="none" stroke="#0969da" stroke-width="2.5"/>\n`;
+        } else {
+          // Pure Vector Bar Chart
+          cleanVals.forEach((val, i) => {
+            const bx = plotLeft + i * groupWidth + (groupWidth - barWidth) / 2;
+            const bh = (val / maxVal) * plotHeight;
+            const by = plotBottom - bh;
+            const barColor = palette[i % palette.length];
+
+            svgElements += `<rect x="${bx.toFixed(2)}" y="${by.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${bh.toFixed(2)}" fill="${barColor}" rx="2" ry="2"/>\n`;
+
+            // X-axis Label (rotated if > 8 items or long)
+            const labelStr = escapeXml(categories[i] || `Item ${i + 1}`);
+            const textX = (bx + barWidth / 2).toFixed(2);
+            if (count > 8) {
+              const truncatedLabel = labelStr.length > 20 ? labelStr.substring(0, 18) + '…' : labelStr;
+              svgElements += `<text x="${textX}" y="508" text-anchor="end" transform="rotate(-40 ${textX} 508)" font-family="Inter, system-ui, sans-serif" font-size="10" fill="#4b5563">${truncatedLabel}</text>\n`;
+            } else {
+              svgElements += `<text x="${textX}" y="512" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#4b5563">${labelStr}</text>\n`;
+            }
+          });
+        }
+      }
+    }
+
+    const titleEscaped = escapeXml(titleText);
+
+    return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <style>
+    text { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  </style>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="${width / 2}" y="38" text-anchor="middle" font-size="16" font-weight="600" fill="#111827">${titleEscaped}</text>
+  ${svgElements}
+</svg>`;
+  }
+
   public downloadSVG(filename = 'chart') {
-    this.downloadPNG(filename);
+    try {
+      const svgString = this.generatePureVectorSVG(filename);
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `${filename}.svg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate pure vector SVG:', err);
+    }
+  }
+
+  public async downloadPDF(filename = 'chart') {
+    try {
+      // Generate pure vector SVG string
+      const svgString = this.generatePureVectorSVG(filename);
+
+      // Parse SVG string to DOM element
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+      const svgElement = svgDoc.documentElement;
+
+      if (!svgElement || svgElement.querySelector('parsererror')) {
+        throw new Error('Failed to parse SVG string for vector PDF generation');
+      }
+
+      // Create landscape A4 PDF (297mm x 210mm)
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const margin = 10;
+      const maxW = pdfWidth - (margin * 2);
+      const maxH = pdfHeight - (margin * 2);
+
+      const svgWidth = 1000;
+      const svgHeight = 600;
+
+      let fitW = maxW;
+      let fitH = (svgHeight / svgWidth) * fitW;
+      if (fitH > maxH) {
+        fitH = maxH;
+        fitW = (svgWidth / svgHeight) * fitH;
+      }
+
+      const x = (pdfWidth - fitW) / 2;
+      const y = (pdfHeight - fitH) / 2;
+
+      // Draw pure vector elements directly into PDF stream
+      await svg2pdf(svgElement, pdf, {
+        x: x,
+        y: y,
+        width: fitW,
+        height: fitH
+      });
+
+      pdf.save(`${filename}.pdf`);
+    } catch (err) {
+      console.error('Failed to export vector chart PDF:', err);
+    }
   }
 
   public exportDataCSV(filename = 'chart_data') {
@@ -556,8 +808,12 @@ export class PlotlyChart extends LitElement {
         ` : html`
           ${this.showExportButtons && this.data.length > 0 ? html`
             <div class="chart-export-toolbar" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 3px 8px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; margin-bottom: 2px; flex-shrink: 0;">
-              <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.downloadPNG()} title="Download chart as PNG image">
-                📷 Export PNG
+              <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.downloadSVG()} title="Export chart as SVG image with white background">
+                🎨 Export SVG
+              </button>
+
+              <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.downloadPDF()} title="Export chart as PDF document">
+                📄 Export PDF
               </button>
 
               <button class="chart-export-btn" style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: 11px; font-weight: 500; color: #374151; background: #ffffff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;" @click=${() => this.exportDataCSV()} title="Export chart dataset to CSV">

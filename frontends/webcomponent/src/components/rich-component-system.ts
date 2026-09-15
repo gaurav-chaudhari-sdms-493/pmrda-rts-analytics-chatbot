@@ -2411,12 +2411,12 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
   render(component: RichComponent): HTMLElement {
     const container = document.createElement('div');
     container.className = 'rich-component rich-chart';
+    container.setAttribute('style', 'display: flex; flex-direction: column; width: 100%; height: 500px; min-height: 500px;');
     container.dataset.componentId = component.id;
 
     const dataObj = component.data || {};
     let plotlyData = dataObj.data;
     let layout = dataObj.layout || {};
-    const title = (component as any).title || dataObj.title || '';
     const config = (component as any).config || dataObj.config || {};
 
     if (!plotlyData && Array.isArray(dataObj)) {
@@ -2431,7 +2431,7 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
     if (plotlyData && Array.isArray(plotlyData)) {
       // Create plotly-chart web component
       const chartElement = document.createElement('plotly-chart') as any;
-      chartElement.setAttribute('style', 'display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1; min-height: 0;');
+      chartElement.setAttribute('style', 'display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1; min-height: 460px;');
 
       // Set theme to match current theme
       const vannaChat = document.querySelector('vanna-chat');
@@ -2441,18 +2441,8 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
         chartElement.theme = 'light';
       }
 
-      // Wrap in container with optional title
-      if (title) {
-        container.innerHTML = `
-          <div class="chart-header">
-            <h3 class="chart-title">${title}</h3>
-          </div>
-          <div class="chart-content" style="height: 480px; width: 100%; display: flex; flex-direction: column;"></div>
-        `;
-        container.querySelector('.chart-content')?.appendChild(chartElement);
-      } else {
-        container.appendChild(chartElement);
-      }
+      // Append chart element directly to container (title is displayed inside the graph itself)
+      container.appendChild(chartElement);
 
       // Set data AFTER the element is in the DOM
       // This ensures the web component is fully initialized
