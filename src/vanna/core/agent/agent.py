@@ -197,12 +197,27 @@ class Agent:
                     )
 
             error_msg_str = str(e)
-            if any(k in error_msg_str.lower() for k in ["402", "credit", "limit", "in_flight", "budget", "exceeded"]):
+            error_lower = error_msg_str.lower()
+
+            is_timeout = any(k in error_lower for k in ["timeout", "timed out", "idle timeout", "connection closed"])
+            is_credit_limit = not is_timeout and any(k in error_lower for k in ["402", "credit", "quota", "budget_exceeded", "spending limit", "rate_limit"])
+
+            if is_timeout:
+                error_title = "Upstream AI Connection Timeout"
+                error_description = "The AI model connection timed out while waiting for a response."
+                one_line_chat_response = "⚠️ **AI Connection Timeout:** Upstream model connection timed out. Please click 'Try again' to re-send your question."
+                error_metadata = {
+                    "Reason": "Upstream LLM network stream idle timeout",
+                    "Details": error_msg_str
+                }
+                if conversation_id:
+                    error_metadata["Conversation ID"] = conversation_id
+            elif is_credit_limit:
                 error_title = "AI Service Credit / Weekly Limit Reached"
                 error_description = "OpenRouter API key weekly spending limit or account credit balance has been reached."
                 one_line_chat_response = "⚠️ **AI Service Limit Reached:** OpenRouter key weekly spending limit or account credit balance has been reached. Please check key limits or top up credits."
                 error_metadata = {
-                    "Reason": "Key weekly limit ($2.00) or account balance ($0.00) reached",
+                    "Reason": "Key weekly limit or account balance reached",
                     "How to Fix (Step 1)": "Visit openrouter.ai/settings/keys and increase weekly limit (e.g. set to $5.00)",
                     "How to Fix (Step 2)": "Visit openrouter.ai/settings/credits to top up credits",
                     "मराठी माहिती": "ओपनराऊटर की ची वरची खर्च मर्यादा पूर्ण झाली आहे. कृपया मर्यादा वाढवा.",
@@ -1197,9 +1212,7 @@ class Agent:
 The agent stopped after executing {tool_iterations} tools (the configured maximum). The task may not be fully complete.
 
 You can:
-- Ask me to continue where I left off
-- Adjust the `max_tool_iterations` setting if you need more tool calls
-- Break the task into smaller steps"""
+- Ask me to **continue** where I left off"""
 
             yield UiComponent(
                 rich_component=RichTextComponent(

@@ -8,7 +8,7 @@ from typing import Optional
 def get_vanna_component_script(
     dev_mode: bool = False,
     static_path: str = "/static",
-    cdn_url: str = "https://img.vanna.ai/vanna-components.js",
+    cdn_url: str = "/static/vanna-components.js",
 ) -> str:
     """Get the script tag for loading Vanna web components.
 
@@ -31,7 +31,7 @@ def get_vanna_component_script(
 def get_index_html(
     dev_mode: bool = False,
     static_path: str = "/static",
-    cdn_url: str = "https://img.vanna.ai/vanna-components.js",
+    cdn_url: str = "/static/vanna-components.js",
     api_base_url: str = "",
 ) -> str:
     """Generate index HTML with configurable component loading.

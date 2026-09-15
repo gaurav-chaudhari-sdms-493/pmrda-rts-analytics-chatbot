@@ -4,7 +4,7 @@
   "description": "Lit-based web components for Vanna User Agents",
   "main": "dist/vanna-components.js",
   "scripts": {
-    "sync-version": "node scripts/sync-version.js",
+    "sync-version": "node scripts/sync-version.cjs",
     "dev": "vite",
     "build": "npm run sync-version && tsc && vite build",
     "preview": "vite preview",
@@ -24,7 +24,7 @@
   ],
   "author": "Zain Hoda <zain@vanna.ai>",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/vanna-ai/vanna.git",
@@ -39,8 +39,9 @@
     "src"
   ],
   "dependencies": {
-    "lit": "^3.3.1",
-    "plotly.js-dist-min": "^3.1.0"
+    "chart.js": "^4.5.1",
+    "lit": "^3.3.3",
+    "plotly.js-dist-min": "^4.1.1"
   },
   "devDependencies": {
     "@storybook/addon-actions": "^8.6.14",
@@ -51,7 +52,7 @@
     "@storybook/web-components-vite": "^8.6.14",
     "@types/plotly.js-dist-min": "^2.3.4",
     "storybook": "^8.6.14",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.5"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
   }
 }

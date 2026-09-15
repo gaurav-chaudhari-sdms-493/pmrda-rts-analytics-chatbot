@@ -48,16 +48,15 @@ class PlotlyChartGenerator:
         if df.empty:
             raise ValueError("Cannot visualize empty DataFrame")
 
-        # Heuristic: If 4 or more columns, render as a table
-        if len(df.columns) >= 4:
-            fig = self._create_table(df, title)
-            result: Dict[str, Any] = json.loads(pio.to_json(fig))
-            return result
-
         # Identify column types
-        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        raw_numeric = df.select_dtypes(include=["number"]).columns.tolist()
+        # Filter out ID columns from metric candidates unless no other metric exists
+        numeric_cols = [c for c in raw_numeric if not (c.lower().endswith("_id") or c.lower() == "id")]
+        if not numeric_cols and raw_numeric:
+            numeric_cols = raw_numeric
+
         categorical_cols = df.select_dtypes(
-            include=["object", "category"]
+            include=["object", "category", "string"]
         ).columns.tolist()
         datetime_cols = df.select_dtypes(include=["datetime64"]).columns.tolist()
 
@@ -70,14 +69,20 @@ class PlotlyChartGenerator:
             fig = self._create_time_series_chart(
                 df, datetime_cols[0], numeric_cols, title
             )
+        elif len(numeric_cols) >= 1 and len(categorical_cols) >= 1:
+            # Select best primary categorical column (e.g. department_name over department_name_mar or IDs)
+            cat_col = categorical_cols[0]
+            for c in categorical_cols:
+                lower = c.lower()
+                if "name" in lower and not lower.endswith("_mar") and not lower.endswith("_mr"):
+                    cat_col = c
+                    break
+
+            num_col = numeric_cols[0]
+            fig = self._create_bar_chart(df, cat_col, num_col, title)
         elif len(numeric_cols) == 1 and len(categorical_cols) == 0:
             # Single numeric column: histogram
             fig = self._create_histogram(df, numeric_cols[0], title)
-        elif len(numeric_cols) == 1 and len(categorical_cols) == 1:
-            # One categorical, one numeric: bar chart
-            fig = self._create_bar_chart(
-                df, categorical_cols[0], numeric_cols[0], title
-            )
         elif len(numeric_cols) == 2:
             # Two numeric columns: scatter plot
             fig = self._create_scatter_plot(df, numeric_cols[0], numeric_cols[1], title)
@@ -87,6 +92,9 @@ class PlotlyChartGenerator:
         elif len(categorical_cols) >= 2:
             # Multiple categorical: grouped bar chart
             fig = self._create_grouped_bar_chart(df, categorical_cols, title)
+        elif len(df.columns) >= 4:
+            # Fallback for complex multi-column metadata without clear numeric metrics: table
+            fig = self._create_table(df, title)
         else:
             # Fallback: show first two columns as scatter/bar
             if len(df.columns) >= 2:
@@ -98,8 +106,8 @@ class PlotlyChartGenerator:
                     "Cannot determine appropriate visualization for this DataFrame"
                 )
 
-        # Convert to JSON-serializable dict using plotly's JSON encoder
-        result = json.loads(pio.to_json(fig))
+        # Convert to JSON-serializable dict using native python data types
+        result = json.loads(json.dumps(fig.to_dict(), default=str))
         return result
 
     def _apply_standard_layout(self, fig: go.Figure) -> go.Figure:
@@ -140,16 +148,40 @@ class PlotlyChartGenerator:
         self, df: pd.DataFrame, x_col: str, y_col: str, title: str
     ) -> go.Figure:
         """Create a bar chart for categorical vs numeric data."""
-        # Aggregate if needed
-        agg_df = df.groupby(x_col)[y_col].sum().reset_index()
-        fig = px.bar(
-            agg_df,
-            x=x_col,
-            y=y_col,
-            title=title,
-            color_discrete_sequence=[self.THEME_COLORS["orange"]],
+        df_copy = df.copy()
+        # Clean numeric column
+        df_copy[y_col] = pd.to_numeric(
+            df_copy[y_col].astype(str).str.replace(",", "").str.strip(), errors="coerce"
+        ).fillna(0)
+
+        # Aggregate by category
+        agg_df = df_copy.groupby(x_col, as_index=False)[y_col].sum()
+        # Sort descending by numeric value
+        agg_df = agg_df.sort_values(by=y_col, ascending=False)
+
+        # Limit to top 25 categories for clean display
+        if len(agg_df) > 25:
+            agg_df = agg_df.head(25)
+
+        x_list = [str(x) for x in agg_df[x_col].tolist()]
+        y_list = [float(y) for y in agg_df[y_col].tolist()]
+
+        fig = go.Figure(
+            data=[
+                go.Bar(
+                    x=x_list,
+                    y=y_list,
+                    marker=dict(color="#0969da"),
+                    hovertemplate="<b>%{x}</b><br>" + str(y_col) + ": <b>%{y:,.0f}</b><extra></extra>",
+                )
+            ]
         )
-        fig.update_layout(xaxis_title=x_col, yaxis_title=y_col)
+        fig.update_layout(
+            title=title,
+            xaxis_title=x_col.replace("_", " ").title(),
+            yaxis_title=y_col.replace("_", " ").title(),
+            showlegend=False,
+        )
         self._apply_standard_layout(fig)
         return fig
 

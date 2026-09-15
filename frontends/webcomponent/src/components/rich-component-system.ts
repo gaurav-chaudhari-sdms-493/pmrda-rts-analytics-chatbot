@@ -582,18 +582,16 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         ? numCols.map((c: string) => String(c).replace(/_/g, ' ').toUpperCase()).join(' / ')
         : 'COUNT';
 
+      const isMultiTrace = numCols.length > 1;
+      const topRows = rows.length > 25 ? rows.slice(0, 25) : rows;
+
       let plotlyTraces: any[] = [];
       const palette = ['#0969da', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6', '#10b981'];
 
-      // Compute dynamic width so large datasets (like 65 rows) scroll horizontally with ample bar width
-      const numRowsToShow = rows.length;
-      const minChartWidth = Math.max(850, numRowsToShow * 36);
-
       let plotlyLayout: any = {
-        autosize: false,
-        width: minChartWidth,
+        autosize: true,
         height: 480,
-        margin: { t: 60, r: 40, b: 130, l: 95 },
+        margin: { t: 35, r: 35, b: 100, l: 75 },
         font: { family: 'Inter, system-ui, sans-serif', color: '#374151', size: 11 },
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
@@ -603,21 +601,21 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           align: 'left',
           namelength: -1
         },
-        showlegend: true,
+        showlegend: isMultiTrace,
         legend: {
           itemclick: 'toggle',
           itemdoubleclick: 'toggleothers',
           orientation: 'h',
-          y: 1.15,
+          y: 1.08,
           x: 0.5,
           xanchor: 'center',
+          yanchor: 'bottom',
           font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#374151' }
         },
         xaxis: {
           title: {
             text: xAxisTitleText,
-            font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#1f2937' },
-            standoff: 25
+            font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#1f2937' }
           },
           automargin: true,
           tickangle: -45,
@@ -628,8 +626,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         yaxis: {
           title: {
             text: yAxisTitleText,
-            font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#1f2937' },
-            standoff: 25
+            font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#1f2937' }
           },
           automargin: true,
           tickfont: { size: 11, color: '#4b5563' },
@@ -640,14 +637,13 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       if (viewType === 'bar') {
         if (catCol && numCols.length > 0) {
-          const topRows = rows;
           const xVals = topRows.map((r: any) => r[catCol]);
           plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
             name: String(nc).replace(/_/g, ' ').toUpperCase(),
             type: 'bar',
-            showlegend: true,
+            showlegend: isMultiTrace,
             marker: { color: palette[idx % palette.length], opacity: 0.9 },
             hovertemplate: '<b>%{x}</b><br>' + String(nc).replace(/_/g, ' ') + ': <b>%{y:,.0f}</b><extra></extra>'
           }));
@@ -658,13 +654,13 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 25);
           plotlyTraces = [{
             x: sorted.map(e => e[0]),
             y: sorted.map(e => e[1]),
             type: 'bar',
             name: String(catCol).replace(/_/g, ' ').toUpperCase(),
-            showlegend: true,
+            showlegend: false,
             marker: { color: palette[0], opacity: 0.9 },
             hovertemplate: '<b>%{x}</b><br>Total Count: <b>%{y:,.0f}</b><extra></extra>'
           }];
@@ -689,7 +685,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             mode: 'lines+markers',
             type: 'scatter',
             name: String(valCol).replace(/_/g, ' ').toUpperCase(),
-            showlegend: true,
+            showlegend: false,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
@@ -714,7 +710,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             mode: 'lines+markers',
             type: 'scatter',
             name: 'Trend Over Time',
-            showlegend: true,
+            showlegend: false,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
@@ -722,13 +718,12 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             hovertemplate: '<b>%{x}</b><br>Count: <b>%{y:,.0f}</b><extra></extra>'
           }];
         } else if (catCol && numCols.length > 0) {
-          const topRows = rows;
           const xVals = topRows.map((r: any) => r[catCol]);
           plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
             name: String(nc).replace(/_/g, ' ').toUpperCase(),
-            showlegend: true,
+            showlegend: isMultiTrace,
             mode: 'lines+markers',
             type: 'scatter',
             line: { shape: 'spline', width: 3, color: palette[idx % palette.length] },
@@ -744,14 +739,14 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 25);
           plotlyTraces = [{
             x: sorted.map(e => e[0]),
             y: sorted.map(e => e[1]),
             mode: 'lines+markers',
             type: 'scatter',
             name: String(catCol).replace(/_/g, ' ').toUpperCase(),
-            showlegend: true,
+            showlegend: false,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
@@ -1190,8 +1185,8 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           ${tableHTML}
           ${paginationHTML}
         </div>
-        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'}; overflow: auto; max-height: 550px; width: 100%; border-radius: 8px; border: 1px solid #e5e7eb;">
-          <plotly-chart></plotly-chart>
+        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'flex'}; flex-direction: column; width: 100%; height: 500px; padding: 6px; border-radius: 8px; border: 1px solid #e5e7eb; box-sizing: border-box; background: #ffffff; overflow: hidden;">
+          <plotly-chart style="display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1; min-height: 0;"></plotly-chart>
         </div>
       `;
 
@@ -2436,6 +2431,7 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
     if (plotlyData && Array.isArray(plotlyData)) {
       // Create plotly-chart web component
       const chartElement = document.createElement('plotly-chart') as any;
+      chartElement.setAttribute('style', 'display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1; min-height: 0;');
 
       // Set theme to match current theme
       const vannaChat = document.querySelector('vanna-chat');
@@ -2451,7 +2447,7 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
           <div class="chart-header">
             <h3 class="chart-title">${title}</h3>
           </div>
-          <div class="chart-content"></div>
+          <div class="chart-content" style="height: 480px; width: 100%; display: flex; flex-direction: column;"></div>
         `;
         container.querySelector('.chart-content')?.appendChild(chartElement);
       } else {

@@ -252,7 +252,11 @@ Always use the `run_sql` tool to execute valid PostgreSQL SQL queries. DO NOT gu
       3. Next, call `visualize_data(filename='query_results_xxxx.csv', title='...')` using the exact filename returned by `run_sql` to generate the interactive Plotly chart figure.
       4. NEVER attempt PostgreSQL `COPY ... TO file` commands or guess non-existent CSV filenames like `ward_complaints_data.csv`.
 
-11. ADDITIONAL RULES:
+11. NO TECHNICAL EXTRAS OR METADATA (STRICT MANDATE):
+    - DO NOT include internal technical metadata, 'Visualization Notes', 'Graph generated: filename.csv', 'Technical Details', 'CSV filename', or internal tool call notes in your final text response.
+    - Keep text responses strictly executive, clean, and concise, focused on key data insights, key metrics, and answers.
+
+12. ADDITIONAL RULES:
     - NEVER search using `complaint.title` or `complaint.description`. Always search standard master table values (`category_master.category_name` or `sub_category_master.sub_category_name`).
     - NEVER perform `SELECT * FROM complaint`. ALWAYS select specific relevant summary columns (e.g. `c.id`, `c.complaint_number`, `c.title`, `cat.category_name`, `w.ward_name`, `p.prabhag_name`, `c.created_at`).
     - ALWAYS convert database text fields to lowercase using `LOWER(col_name)` and compare against lowercase search strings.
@@ -398,5 +402,13 @@ if __name__ == "__main__":
     default_user = User(id="admin@example.com", email="admin@example.com", group_memberships=["admin"])
     asyncio.run(seed_domain_knowledge(agent_memory, default_user))
 
-    server = VannaFastAPIServer(agent)
+    dist_folder = os.path.join(os.path.dirname(__file__), "frontends/webcomponent/dist")
+    server = VannaFastAPIServer(
+        agent,
+        config={
+            "dev_mode": True,
+            "static_folder": dist_folder,
+            "cdn_url": "/static/vanna-components.js",
+        },
+    )
     server.run()
