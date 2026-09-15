@@ -1,6 +1,6 @@
 """Plotly-based chart generator with automatic chart type selection."""
 
-from typing import Dict, Any, List, cast
+from typing import Dict, Any, List, Optional, cast
 import json
 import pandas as pd
 import plotly.graph_objects as go
@@ -23,28 +23,10 @@ class PlotlyChartGenerator:
     # Color palette for charts (excluding cream as it's too light for data)
     COLOR_PALETTE = ["#15a8a8", "#fe5d26", "#bf1363", "#023d60"]
 
-    def generate_chart(self, df: pd.DataFrame, title: str = "Chart") -> Dict[str, Any]:
-        """Generate a Plotly chart based on DataFrame shape and types.
-
-        Heuristics:
-        - 4+ columns: table
-        - 1 numeric column: histogram
-        - 2 columns (1 categorical, 1 numeric): bar chart
-        - 2 numeric columns: scatter plot
-        - 3+ numeric columns: correlation heatmap or multi-line chart
-        - Time series data: line chart
-        - Multiple categorical: grouped bar chart
-
-        Args:
-            df: DataFrame to visualize
-            title: Title for the chart
-
-        Returns:
-            Plotly figure as dictionary
-
-        Raises:
-            ValueError: If DataFrame is empty or cannot be visualized
-        """
+    def generate_chart(
+        self, df: pd.DataFrame, title: str = "Chart", preferred_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate a Plotly chart based on DataFrame shape, types, and preferred chart type."""
         if df.empty:
             raise ValueError("Cannot visualize empty DataFrame")
 
@@ -63,12 +45,19 @@ class PlotlyChartGenerator:
         # Check for time series
         is_timeseries = len(datetime_cols) > 0
 
+        # Check if pie or line chart was explicitly requested
+        title_lower = title.lower() if title else ""
+        type_lower = preferred_type.lower() if preferred_type else ""
+        is_pie_requested = "pie" in type_lower or "doughnut" in type_lower or "pie" in title_lower or "doughnut" in title_lower
+        is_line_requested = "line" in type_lower or "trend" in type_lower or "line" in title_lower or "trend" in title_lower
+
+        if is_pie_requested and len(df.columns) >= 2:
+            cat_col = categorical_cols[0] if categorical_cols else df.columns[0]
+            num_col = numeric_cols[0] if numeric_cols else df.columns[1]
+            if cat_col == num_col and len(df.columns) > 1:
+                num_col = df.columns[1] if cat_col == df.columns[0] else df.columns[0]
+            fig = self._create_pie_chart(df, cat_col, num_col, title)
         # Apply heuristics
-        if is_timeseries and len(numeric_cols) > 0:
-            # Time series line chart
-            fig = self._create_time_series_chart(
-                df, datetime_cols[0], numeric_cols, title
-            )
         elif len(numeric_cols) >= 1 and len(categorical_cols) >= 1:
             # Select best primary categorical column (e.g. department_name over department_name_mar or IDs)
             cat_col = categorical_cols[0]
@@ -79,7 +68,16 @@ class PlotlyChartGenerator:
                     break
 
             num_col = numeric_cols[0]
-            fig = self._create_bar_chart(df, cat_col, num_col, title)
+
+            if is_line_requested:
+                fig = self._create_line_chart(df, cat_col, num_col, title)
+            else:
+                fig = self._create_bar_chart(df, cat_col, num_col, title)
+        elif is_timeseries and len(numeric_cols) > 0:
+            # Time series line chart
+            fig = self._create_time_series_chart(
+                df, datetime_cols[0], numeric_cols, title
+            )
         elif len(numeric_cols) == 1 and len(categorical_cols) == 0:
             # Single numeric column: histogram
             fig = self._create_histogram(df, numeric_cols[0], title)
@@ -172,6 +170,81 @@ class PlotlyChartGenerator:
                     x=x_list,
                     y=y_list,
                     marker=dict(color="#0969da"),
+                    hovertemplate="<b>%{x}</b><br>" + str(y_col) + ": <b>%{y:,.0f}</b><extra></extra>",
+                )
+            ]
+        )
+        fig.update_layout(
+            title=title,
+            xaxis_title=x_col.replace("_", " ").title(),
+            yaxis_title=y_col.replace("_", " ").title(),
+            showlegend=False,
+        )
+        self._apply_standard_layout(fig)
+        return fig
+
+    def _create_pie_chart(
+        self, df: pd.DataFrame, cat_col: str, num_col: str, title: str
+    ) -> go.Figure:
+        """Create a Pie/Doughnut chart for categorical vs numeric data."""
+        df_copy = df.copy()
+        df_copy[num_col] = pd.to_numeric(
+            df_copy[num_col].astype(str).str.replace(",", "").str.strip(), errors="coerce"
+        ).fillna(0)
+
+        agg_df = df_copy.groupby(cat_col, as_index=False)[num_col].sum()
+        agg_df = agg_df.sort_values(by=num_col, ascending=False)
+
+        if len(agg_df) > 10:
+            top10 = agg_df.head(10)
+            other_sum = agg_df.iloc[10:][num_col].sum()
+            if other_sum > 0:
+                other_df = pd.DataFrame([{cat_col: "Others", num_col: other_sum}])
+                agg_df = pd.concat([top10, other_df], ignore_index=True)
+            else:
+                agg_df = top10
+
+        labels = [str(x) for x in agg_df[cat_col].tolist()]
+        values = [float(y) for y in agg_df[num_col].tolist()]
+
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=labels,
+                    values=values,
+                    hole=0.4,
+                    textinfo="label+percent",
+                    hovertemplate="<b>%{label}</b><br>" + str(num_col) + ": <b>%{value:,.0f}</b> (%{percent})<extra></extra>",
+                )
+            ]
+        )
+        fig.update_layout(
+            title=title,
+            showlegend=True,
+        )
+        self._apply_standard_layout(fig)
+        return fig
+
+    def _create_line_chart(
+        self, df: pd.DataFrame, x_col: str, y_col: str, title: str
+    ) -> go.Figure:
+        """Create a line chart for data trends."""
+        df_copy = df.copy()
+        df_copy[y_col] = pd.to_numeric(
+            df_copy[y_col].astype(str).str.replace(",", "").str.strip(), errors="coerce"
+        ).fillna(0)
+
+        x_list = [str(x) for x in df_copy[x_col].tolist()]
+        y_list = [float(y) for y in df_copy[y_col].tolist()]
+
+        fig = go.Figure(
+            data=[
+                go.Scatter(
+                    x=x_list,
+                    y=y_list,
+                    mode="lines+markers",
+                    line=dict(color="#0969da", width=2),
+                    marker=dict(size=6),
                     hovertemplate="<b>%{x}</b><br>" + str(y_col) + ": <b>%{y:,.0f}</b><extra></extra>",
                 )
             ]

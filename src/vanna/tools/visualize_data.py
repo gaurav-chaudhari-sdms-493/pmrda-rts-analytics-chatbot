@@ -27,6 +27,10 @@ class VisualizeDataArgs(BaseModel):
     title: Optional[str] = Field(
         default=None, description="Optional title for the chart"
     )
+    chart_type: Optional[str] = Field(
+        default=None,
+        description="Optional chart type requested by the user: 'pie', 'doughnut', 'bar', 'line', 'scatter', etc."
+    )
 
 
 class VisualizeDataTool(Tool[VisualizeDataArgs]):
@@ -52,7 +56,7 @@ class VisualizeDataTool(Tool[VisualizeDataArgs]):
 
     @property
     def description(self) -> str:
-        return "Create a visualization from a CSV file. The tool automatically selects an appropriate chart type based on the data."
+        return "Create a visualization from a CSV file. Specify chart_type='pie' if the user explicitly asks for a pie chart or doughnut chart, 'bar' for bar chart, 'line' for line chart."
 
     def get_args_schema(self) -> Type[VisualizeDataArgs]:
         return VisualizeDataArgs
@@ -103,7 +107,7 @@ class VisualizeDataTool(Tool[VisualizeDataArgs]):
 
             # Generate chart using PlotlyChartGenerator
             logger.info("Generating chart...")
-            chart_dict = self.plotly_generator.generate_chart(df, title)
+            chart_dict = self.plotly_generator.generate_chart(df, title=title, preferred_type=args.chart_type)
             logger.info(
                 f"Chart generated, type: {type(chart_dict)}, keys: {list(chart_dict.keys()) if isinstance(chart_dict, dict) else 'N/A'}"
             )
@@ -111,7 +115,11 @@ class VisualizeDataTool(Tool[VisualizeDataArgs]):
             # Create result message
             row_count = len(df)
             col_count = len(df.columns)
-            result = f"Created visualization from '{args.filename}' ({row_count} rows, {col_count} columns)."
+            result = (
+                f"Visualization successfully generated for the UI container ({row_count} rows, {col_count} columns). "
+                "CRITICAL: DO NOT output Markdown image tags (e.g. `![...](...)`), CSV filenames, or technical file references in your text response. "
+                "The chart is automatically rendered in the UI. Provide only executive data insights."
+            )
 
             # Create ChartComponent
             logger.info("Creating ChartComponent...")

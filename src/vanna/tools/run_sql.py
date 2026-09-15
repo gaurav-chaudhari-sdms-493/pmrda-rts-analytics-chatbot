@@ -173,7 +173,12 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                             + "\n(Results preview truncated. Summarize key totals or findings directly for the user.)"
                         )
 
-                    result = f"Query executed successfully ({row_count} total rows returned, output saved to file '{filename}'). To visualize this data with a chart/graph, call visualize_data with filename='{filename}':\n{results_preview}"
+                    result = (
+                        f"Query executed successfully ({row_count} total rows returned, output cached as '{filename}'). "
+                        f"To visualize this data with a chart/graph, call visualize_data(filename='{filename}'). "
+                        "NOTE: DO NOT write Markdown image tags (e.g. `![...](...)`) or mention internal CSV filenames in your response text. "
+                        f"Data preview:\n{results_preview}"
+                    )
 
                     # Create DataFrame component for UI with capped records and total row count
                     description_str = (
