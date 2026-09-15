@@ -575,24 +575,38 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         return c !== dateCol && !numCols.includes(c);
       }) || dateCol || cols[0];
 
+      const xAxisTitleText = catCol
+        ? String(catCol).replace(/_/g, ' ').toUpperCase()
+        : (dateCol ? 'DATE / TIME' : 'CATEGORIES');
+      const yAxisTitleText = numCols.length > 0
+        ? numCols.map((c: string) => String(c).replace(/_/g, ' ').toUpperCase()).join(' / ')
+        : 'COUNT';
+
       let plotlyTraces: any[] = [];
       const palette = ['#0969da', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6', '#10b981'];
 
+      // Compute dynamic width so large datasets (like 65 rows) scroll horizontally with ample bar width
+      const numRowsToShow = rows.length;
+      const minChartWidth = Math.max(850, numRowsToShow * 36);
+
       let plotlyLayout: any = {
-        autosize: true,
-        margin: { t: 55, r: 25, b: 75, l: 60 },
+        autosize: false,
+        width: minChartWidth,
+        height: 480,
+        margin: { t: 60, r: 40, b: 130, l: 95 },
         font: { family: 'Inter, system-ui, sans-serif', color: '#374151', size: 11 },
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
         hovermode: 'closest',
         hoverlabel: {
-          bgcolor: '#1f2937',
-          bordercolor: '#1f2937',
-          font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#ffffff' },
-          align: 'left'
+          font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#374151' },
+          align: 'left',
+          namelength: -1
         },
         showlegend: true,
         legend: {
+          itemclick: 'toggle',
+          itemdoubleclick: 'toggleothers',
           orientation: 'h',
           y: 1.15,
           x: 0.5,
@@ -600,6 +614,11 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           font: { family: 'Inter, system-ui, sans-serif', size: 11, color: '#374151' }
         },
         xaxis: {
+          title: {
+            text: xAxisTitleText,
+            font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#1f2937' },
+            standoff: 25
+          },
           automargin: true,
           tickangle: -45,
           tickfont: { size: 10, color: '#4b5563' },
@@ -607,6 +626,11 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           zeroline: false
         },
         yaxis: {
+          title: {
+            text: yAxisTitleText,
+            font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#1f2937' },
+            standoff: 25
+          },
           automargin: true,
           tickfont: { size: 11, color: '#4b5563' },
           gridcolor: 'rgba(229, 231, 235, 0.7)',
@@ -616,16 +640,16 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       if (viewType === 'bar') {
         if (catCol && numCols.length > 0) {
-          const topRows = rows.slice(0, 20);
+          const topRows = rows;
           const xVals = topRows.map((r: any) => r[catCol]);
           plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
-            name: nc,
+            name: String(nc).replace(/_/g, ' ').toUpperCase(),
             type: 'bar',
             showlegend: true,
             marker: { color: palette[idx % palette.length], opacity: 0.9 },
-            hovertemplate: '<b>%{x}</b><br>' + nc + ': <b>%{y:,.0f}</b><extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>' + String(nc).replace(/_/g, ' ') + ': <b>%{y:,.0f}</b><extra></extra>'
           }));
           plotlyLayout.barmode = numCols.length > 1 ? 'group' : 'stack';
         } else if (catCol) {
@@ -634,15 +658,15 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]);
           plotlyTraces = [{
             x: sorted.map(e => e[0]),
             y: sorted.map(e => e[1]),
             type: 'bar',
-            name: catCol,
+            name: String(catCol).replace(/_/g, ' ').toUpperCase(),
             showlegend: true,
             marker: { color: palette[0], opacity: 0.9 },
-            hovertemplate: '<b>%{x}</b><br>Total Complaints: <b>%{y:,.0f}</b><extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>Total Count: <b>%{y:,.0f}</b><extra></extra>'
           }];
         }
       } else if (viewType === 'line') {
@@ -657,20 +681,20 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
               aggregated[strVal] = (aggregated[strVal] || 0) + v;
             }
           });
-          const sortedEntries = Object.entries(aggregated).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 50);
+          const sortedEntries = Object.entries(aggregated).sort((a, b) => a[0].localeCompare(b[0]));
 
           plotlyTraces = [{
             x: sortedEntries.map(e => e[0]),
             y: sortedEntries.map(e => e[1]),
             mode: 'lines+markers',
             type: 'scatter',
-            name: valCol,
+            name: String(valCol).replace(/_/g, ' ').toUpperCase(),
             showlegend: true,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
             marker: { size: 7, color: palette[0] },
-            hovertemplate: `<b>%{x}</b><br>${valCol}: <b>%{y:,.0f}</b><extra></extra>`
+            hovertemplate: `<b>%{x}</b><br>${String(valCol).replace(/_/g, ' ')}: <b>%{y:,.0f}</b><extra></extra>`
           }];
         } else if (dateCol) {
           // Time-series trend: group and sort by date ascending
@@ -682,28 +706,28 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
               freqMap[strVal] = (freqMap[strVal] || 0) + 1;
             }
           });
-          const sortedEntries = Object.entries(freqMap).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 50);
+          const sortedEntries = Object.entries(freqMap).sort((a, b) => a[0].localeCompare(b[0]));
 
           plotlyTraces = [{
             x: sortedEntries.map(e => e[0]),
             y: sortedEntries.map(e => e[1]),
             mode: 'lines+markers',
             type: 'scatter',
-            name: 'Complaints Over Time',
+            name: 'Trend Over Time',
             showlegend: true,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
             marker: { size: 7, color: palette[0] },
-            hovertemplate: '<b>%{x}</b><br>Complaints: <b>%{y:,.0f}</b><extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>Count: <b>%{y:,.0f}</b><extra></extra>'
           }];
         } else if (catCol && numCols.length > 0) {
-          const topRows = rows.slice(0, 20);
+          const topRows = rows;
           const xVals = topRows.map((r: any) => r[catCol]);
           plotlyTraces = numCols.slice(0, 3).map((nc: string, idx: number) => ({
             x: xVals,
             y: topRows.map((r: any) => Number(r[nc]) || 0),
-            name: nc,
+            name: String(nc).replace(/_/g, ' ').toUpperCase(),
             showlegend: true,
             mode: 'lines+markers',
             type: 'scatter',
@@ -711,7 +735,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             fill: idx === 0 ? 'tozeroy' : undefined,
             fillcolor: idx === 0 ? 'rgba(9, 105, 218, 0.08)' : undefined,
             marker: { size: 7, color: palette[idx % palette.length] },
-            hovertemplate: '<b>%{x}</b><br>' + nc + ': <b>%{y:,.0f}</b><extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>' + String(nc).replace(/_/g, ' ') + ': <b>%{y:,.0f}</b><extra></extra>'
           }));
         } else if (catCol) {
           // Categorical aggregation sorted by count/value
@@ -720,22 +744,24 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]);
           plotlyTraces = [{
             x: sorted.map(e => e[0]),
             y: sorted.map(e => e[1]),
             mode: 'lines+markers',
             type: 'scatter',
-            name: catCol,
+            name: String(catCol).replace(/_/g, ' ').toUpperCase(),
             showlegend: true,
             line: { shape: 'spline', width: 3, color: palette[0] },
             fill: 'tozeroy',
             fillcolor: 'rgba(9, 105, 218, 0.08)',
             marker: { size: 8, color: palette[0] },
-            hovertemplate: '<b>%{x}</b><br>Complaints: <b>%{y:,.0f}</b><extra></extra>'
+            hovertemplate: '<b>%{x}</b><br>Count: <b>%{y:,.0f}</b><extra></extra>'
           }];
         }
       } else if (viewType === 'pie') {
+        plotlyLayout.autosize = true;
+        plotlyLayout.width = undefined;
         plotlyLayout.margin = { t: 25, r: 25, b: 25, l: 25 };
         plotlyLayout.showlegend = true;
         plotlyLayout.legend = {
@@ -755,7 +781,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const v = Number(r[valCol]) || 0;
             aggregated[k] = (aggregated[k] || 0) + v;
           });
-          const sorted = Object.entries(aggregated).sort((a, b) => b[1] - a[1]).slice(0, 10);
+          const sorted = Object.entries(aggregated).sort((a, b) => b[1] - a[1]).slice(0, 15);
           plotlyTraces = [{
             labels: sorted.map(e => e[0]),
             values: sorted.map(e => e[1]),
@@ -766,7 +792,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             textinfo: 'percent',
             textposition: 'inside',
             marker: { colors: palette, line: { color: '#ffffff', width: 2 } },
-            hovertemplate: `<b>%{label}</b><br>${valCol}: <b>%{value:,.0f}</b> (%{percent})<extra></extra>`
+            hovertemplate: `<b>%{label}</b><br>${String(valCol).replace(/_/g, ' ')}: <b>%{value:,.0f}</b> (%{percent})<extra></extra>`
           }];
         } else if (catCol) {
           const freqMap: Record<string, number> = {};
@@ -774,7 +800,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
             const k = String(r[catCol] ?? 'N/A');
             freqMap[k] = (freqMap[k] || 0) + 1;
           });
-          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 10);
+          const sorted = Object.entries(freqMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
           plotlyTraces = [{
             labels: sorted.map(e => e[0]),
             values: sorted.map(e => e[1]),
@@ -792,6 +818,14 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       chartElement.data = plotlyTraces;
       chartElement.layout = plotlyLayout;
+      chartElement.config = {
+        responsive: true,
+        displayModeBar: false,
+        displaylogo: false,
+        scrollZoom: true,
+        dragmode: 'zoom',
+        doubleClick: 'reset'
+      };
 
       // Enable interactive click-to-filter on chart elements
       if (!chartElement._hasClickListener) {
@@ -1156,7 +1190,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
           ${tableHTML}
           ${paginationHTML}
         </div>
-        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'}; overflow: hidden;">
+        <div class="grid-view-chart-section" style="display: ${showTable ? 'none' : 'block'}; overflow: auto; max-height: 550px; width: 100%; border-radius: 8px; border: 1px solid #e5e7eb;">
           <plotly-chart></plotly-chart>
         </div>
       `;
@@ -2428,8 +2462,8 @@ export class ChartComponentRenderer extends BaseComponentRenderer {
       // This ensures the web component is fully initialized
       requestAnimationFrame(() => {
         chartElement.data = plotlyData; // Plotly traces (array)
-        chartElement.layout = layout; // Plotly layout (object)
-        chartElement.config = config;
+        chartElement.layout = { showlegend: true, ...layout }; // Plotly layout (object)
+        chartElement.config = { displayModeBar: false, scrollZoom: true, responsive: true, ...config };
 
         console.log('ChartComponentRenderer: Set properties after DOM attachment');
       });

@@ -61,7 +61,7 @@ export class PlotlyChart extends LitElement {
     if (!this.plotlyDiv) return;
 
     this.resizeObserver = new ResizeObserver(() => {
-      if (this.plotlyDiv && this.data.length > 0) {
+      if (this.plotlyDiv && this.data.length > 0 && (!this.layout || !this.layout.width)) {
         const width = this.plotlyDiv.offsetWidth;
         Plotly.relayout(this.plotlyDiv, { width });
       }
@@ -78,35 +78,58 @@ export class PlotlyChart extends LitElement {
 
   private _getDefaultLayout(): PlotlyLayout {
     const isDark = this.theme === 'dark';
+    const { xaxis, yaxis, legend, font, hoverlabel, margin, ...restLayout } = this.layout;
 
-    const mergedLayout = {
-      ...this.layout,
-      font: this.layout.font || {
+    const mergedLayout: PlotlyLayout = {
+      ...restLayout,
+      showlegend: this.layout.showlegend !== undefined ? this.layout.showlegend : true,
+      legend: {
+        orientation: 'h',
+        y: 1.15,
+        x: 0.5,
+        xanchor: 'center',
+        font: { family: 'Inter, system-ui, sans-serif', size: 11, color: isDark ? 'rgb(242, 244, 247)' : 'rgb(55, 65, 81)' },
+        itemclick: 'toggle',
+        itemdoubleclick: 'toggleothers',
+        ...(legend || {})
+      },
+      xaxis: {
+        automargin: true,
+        gridcolor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(229, 231, 235, 0.7)',
+        ...(xaxis || {})
+      },
+      yaxis: {
+        automargin: true,
+        gridcolor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(229, 231, 235, 0.7)',
+        ...(yaxis || {})
+      },
+      font: font || {
         family: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         color: isDark ? 'rgb(242, 244, 247)' : 'rgb(55, 65, 81)',
         size: 12
       },
-      hoverlabel: this.layout.hoverlabel || {
-        bgcolor: '#111827',
-        bordercolor: '#111827',
-        font: { family: 'Inter, system-ui, sans-serif', size: 12, color: '#ffffff' },
+      hovermode: this.layout.hovermode || 'closest',
+      hoverlabel: hoverlabel || {
+        font: { family: 'Inter, system-ui, sans-serif', size: 12 },
         align: 'left',
         namelength: -1
       },
-      modebar: {
-        bgcolor: 'transparent',
-        color: '#4b5563',
-        activecolor: '#0969da'
-      },
-      autosize: true,
+      autosize: this.layout.autosize !== undefined ? this.layout.autosize : true,
       width: this.layout.width || undefined,
-      height: this.layout.height || 420,
+      height: this.layout.height || 450,
+      margin: {
+        t: 60,
+        r: 40,
+        b: 120,
+        l: 95,
+        ...(margin || {})
+      }
     };
 
-    if (!this.layout.paper_bgcolor) {
+    if (!mergedLayout.paper_bgcolor) {
       mergedLayout.paper_bgcolor = 'transparent';
     }
-    if (!this.layout.plot_bgcolor) {
+    if (!mergedLayout.plot_bgcolor) {
       mergedLayout.plot_bgcolor = 'transparent';
     }
 
@@ -116,9 +139,10 @@ export class PlotlyChart extends LitElement {
   private _getDefaultConfig() {
     return {
       responsive: true,
-      displayModeBar: false as const,
+      displayModeBar: false,
       displaylogo: false,
       scrollZoom: true,
+      dragmode: 'zoom' as const,
       doubleClick: 'reset' as const,
       modeBarButtonsToRemove: ['sendDataToCloud'] as any,
       toImageButtonOptions: {

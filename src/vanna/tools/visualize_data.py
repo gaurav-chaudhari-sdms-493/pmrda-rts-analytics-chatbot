@@ -64,9 +64,31 @@ class VisualizeDataTool(Tool[VisualizeDataArgs]):
         try:
             logger.info(f"Starting visualization for file: {args.filename}")
 
-            # Read the CSV file using FileSystem
-            csv_content = await self.file_system.read_file(args.filename, context)
-            logger.info(f"Read {len(csv_content)} bytes from CSV file")
+            # Read the CSV file using FileSystem with fallback resolution
+            target_filename = args.filename
+            try:
+                csv_content = await self.file_system.read_file(target_filename, context)
+            except FileNotFoundError:
+                fallback_found = False
+                last_file = context.metadata.get("last_sql_output_file") if (hasattr(context, "metadata") and isinstance(context.metadata, dict)) else None
+                if last_file and await self.file_system.exists(last_file, context):
+                    target_filename = last_file
+                    csv_content = await self.file_system.read_file(target_filename, context)
+                    fallback_found = True
+                else:
+                    try:
+                        user_files = await self.file_system.list_files("", context)
+                        csv_files = [f for f in user_files if f.endswith(".csv")]
+                        if csv_files:
+                            target_filename = csv_files[-1]
+                            csv_content = await self.file_system.read_file(target_filename, context)
+                            fallback_found = True
+                    except Exception:
+                        pass
+                if not fallback_found:
+                    raise
+
+            logger.info(f"Read {len(csv_content)} bytes from CSV file '{target_filename}'")
 
             # Parse CSV into DataFrame
             import io

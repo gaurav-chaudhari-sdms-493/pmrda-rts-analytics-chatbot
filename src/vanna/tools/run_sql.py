@@ -58,6 +58,21 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
         import time
         from vanna.metadata_logger import get_metadata_logger
 
+        sql_upper = args.sql.strip().upper()
+        if sql_upper.startswith("COPY") or " COPY " in sql_upper or "\nCOPY " in sql_upper:
+            error_message = (
+                "PostgreSQL COPY commands are strictly forbidden and will fail with permission denied. "
+                "Execute a standard SELECT query instead (e.g., SELECT w.ward_name, COUNT(c.id) AS total_complaints FROM complaint c LEFT JOIN ward_master w ON c.ward_id = w.id GROUP BY w.ward_name). "
+                "run_sql automatically executes SELECT queries and saves the output to a CSV file for visualization."
+            )
+            return ToolResult(
+                success=False,
+                result_for_llm=error_message,
+                ui_component=None,
+                error=error_message,
+                metadata={"error_type": "copy_forbidden"},
+            )
+
         start_time = time.time()
         try:
             # Use the injected SqlRunner to execute the query
@@ -158,7 +173,7 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                             + "\n(Results preview truncated. Summarize key totals or findings directly for the user.)"
                         )
 
-                    result = f"Query executed successfully ({row_count} total rows returned):\n{results_preview}"
+                    result = f"Query executed successfully ({row_count} total rows returned, output saved to file '{filename}'). To visualize this data with a chart/graph, call visualize_data with filename='{filename}':\n{results_preview}"
 
                     # Create DataFrame component for UI with capped records and total row count
                     description_str = (

@@ -114,12 +114,13 @@ class PlotlyChartGenerator:
             Updated figure with Vanna brand styling
         """
         fig.update_layout(
-            # paper_bgcolor='white',
-            # plot_bgcolor='white',
-            font={"color": self.THEME_COLORS["navy"]},  # Navy for text
-            autosize=True,  # Allow chart to resize responsively
-            colorway=self.COLOR_PALETTE,  # Use Vanna brand colors for data
-            # Don't set width/height - let frontend handle sizing
+            template="plotly_white",
+            hovermode="closest",
+            autosize=True,
+            legend=dict(itemclick="toggle", itemdoubleclick="toggleothers"),
+            font={"family": 'Inter, system-ui, sans-serif', "color": "#1f2937", "size": 12},
+            colorway=["#5465ff", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"],
+            margin=dict(t=50, r=30, b=50, l=50),
         )
         return fig
 
