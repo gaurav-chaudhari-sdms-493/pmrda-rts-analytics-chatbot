@@ -497,7 +497,16 @@ export class PlotlyChart extends LitElement {
 
     const traces = Array.isArray(this.data) ? this.data : [];
     const firstTrace = traces[0] || {};
-    const chartType = (firstTrace.type === 'pie' || firstTrace.type === 'doughnut') ? 'pie' : (firstTrace.type || 'bar');
+
+    let chartType = 'bar';
+    const traceType = String(firstTrace.type || '').toLowerCase();
+    const traceMode = String(firstTrace.mode || '').toLowerCase();
+
+    if (traceType === 'pie' || traceType === 'doughnut') {
+      chartType = 'pie';
+    } else if (traceType === 'scatter' || traceType === 'line' || traceType === 'lines' || traceMode.includes('line')) {
+      chartType = 'line';
+    }
 
     let svgElements = '';
 
@@ -624,6 +633,16 @@ export class PlotlyChart extends LitElement {
             const py = plotBottom - (val / maxVal) * plotHeight;
             pointsAttr += `${px.toFixed(2)},${py.toFixed(2)} `;
             svgElements += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="4" fill="#0969da" stroke="#ffffff" stroke-width="1.5"/>\n`;
+
+            // X-axis Label (rotated if > 8 items or long)
+            const labelStr = escapeXml(categories[i] || `Item ${i + 1}`);
+            const textX = px.toFixed(2);
+            if (count > 8) {
+              const truncatedLabel = labelStr.length > 20 ? labelStr.substring(0, 18) + '…' : labelStr;
+              svgElements += `<text x="${textX}" y="508" text-anchor="end" transform="rotate(-40 ${textX} 508)" font-family="Inter, system-ui, sans-serif" font-size="10" fill="#4b5563">${truncatedLabel}</text>\n`;
+            } else {
+              svgElements += `<text x="${textX}" y="512" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#4b5563">${labelStr}</text>\n`;
+            }
           });
           svgElements += `<polyline points="${pointsAttr.trim()}" fill="none" stroke="#0969da" stroke-width="2.5"/>\n`;
         } else {

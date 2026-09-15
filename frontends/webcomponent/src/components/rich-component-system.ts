@@ -585,13 +585,23 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       const isMultiTrace = numCols.length > 1;
       const topRows = rows.length > 25 ? rows.slice(0, 25) : rows;
 
+      const defaultChartTitle = (title && title !== 'Query Results' && title !== 'DataFrame')
+        ? title
+        : (catCol && yAxisTitleText
+            ? `${yAxisTitleText} BY ${xAxisTitleText}`
+            : 'Query Results Chart');
+
       let plotlyTraces: any[] = [];
       const palette = ['#0969da', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#3b82f6', '#10b981'];
 
       let plotlyLayout: any = {
+        title: {
+          text: defaultChartTitle,
+          font: { family: 'Inter, system-ui, sans-serif', size: 13, color: '#111827', weight: '600' }
+        },
         autosize: true,
         height: 480,
-        margin: { t: 35, r: 35, b: 100, l: 75 },
+        margin: { t: 40, r: 35, b: 100, l: 75 },
         font: { family: 'Inter, system-ui, sans-serif', color: '#374151', size: 11 },
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
