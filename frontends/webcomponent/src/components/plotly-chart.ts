@@ -502,42 +502,25 @@ export class PlotlyChart extends LitElement {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
 
+    const config = this._buildChartConfig();
+    const chartType = config.type;
+    const labels: string[] = config.data?.labels || [];
+    const datasets: any[] = config.data?.datasets || [];
+
     const titleText = typeof this.layout?.title === 'string'
       ? this.layout.title
-      : (this.layout?.title?.text || 'Chart');
-
-    const traces = Array.isArray(this.data) ? this.data : [];
-    const firstTrace = traces[0] || {};
-
-    let chartType = 'bar';
-    const traceType = String(firstTrace.type || '').toLowerCase();
-    const traceMode = String(firstTrace.mode || '').toLowerCase();
-
-    if (traceType === 'pie' || traceType === 'doughnut') {
-      chartType = 'pie';
-    } else if (traceType === 'scatter' || traceType === 'line' || traceType === 'lines' || traceMode.includes('line')) {
-      chartType = 'line';
-    }
+      : (this.layout?.title?.text || config.options?.plugins?.title?.text || 'Chart');
 
     let svgElements = '';
 
-    if (chartType === 'pie') {
-      let labels: string[] = [];
-      let values: number[] = [];
-
-      if (firstTrace.labels && firstTrace.values) {
-        labels = Array.isArray(firstTrace.labels) ? firstTrace.labels.map(String) : [];
-        values = Array.isArray(firstTrace.values) ? firstTrace.values.map(Number) : [];
-      } else if (traces.length > 1) {
-        labels = traces.map(t => String(t.name || t.x?.[0] || ''));
-        values = traces.map(t => Number(t.y?.[0] || t.values?.[0] || 0));
-      }
-
+    if (chartType === 'doughnut') {
+      const firstDataset = datasets[0] || {};
+      const values: number[] = Array.isArray(firstDataset.data) ? firstDataset.data.map(Number) : [];
       const total = values.reduce((a, b) => a + (isNaN(b) ? 0 : b), 0);
       const cx = 380;
       const cy = 320;
       const rOuter = 200;
-      const rInner = 100; // doughnut hole
+      const rInner = 100;
 
       let currentAngle = -Math.PI / 2;
 
@@ -559,7 +542,8 @@ export class PlotlyChart extends LitElement {
         const y2Inner = cy + rInner * Math.sin(startAngle);
 
         const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
-        const color = palette[i % palette.length];
+        const colors = Array.isArray(firstDataset.backgroundColor) ? firstDataset.backgroundColor : palette;
+        const color = colors[i % colors.length] || palette[i % palette.length];
 
         const pathData = `M ${x1Outer.toFixed(2)} ${y1Outer.toFixed(2)} ` +
           `A ${rOuter} ${rOuter} 0 ${largeArcFlag} 1 ${x2Outer.toFixed(2)} ${y2Outer.toFixed(2)} ` +
@@ -568,9 +552,8 @@ export class PlotlyChart extends LitElement {
 
         svgElements += `<path d="${pathData}" fill="${color}" stroke="#ffffff" stroke-width="2"/>\n`;
 
-        // Percentage label inside slice
         const pct = (val / total) * 100;
-        if (pct >= 4.0) {
+        if (pct >= 3.0) {
           const midAngle = (startAngle + endAngle) / 2;
           const rMid = rInner + (rOuter - rInner) * 0.55;
           const lx = cx + rMid * Math.cos(midAngle);
@@ -578,44 +561,57 @@ export class PlotlyChart extends LitElement {
           svgElements += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="middle" dominant-baseline="central" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="bold" fill="#ffffff">${pct.toFixed(1)}%</text>\n`;
         }
 
-        // Legend item
-        const legendY = 120 + i * 24;
+        const legendY = 100 + i * 22;
         if (legendY < 560) {
           const labelStr = escapeXml(labels[i] || `Item ${i + 1}`);
           svgElements += `<rect x="680" y="${legendY}" width="14" height="14" fill="${color}" rx="3"/>\n`;
           svgElements += `<text x="702" y="${legendY + 11}" font-family="Inter, system-ui, sans-serif" font-size="12" fill="#374151">${labelStr} (${val.toLocaleString()} - ${pct.toFixed(1)}%)</text>\n`;
         }
       });
-
     } else {
-      // Bar or Line chart
-      let categories: string[] = [];
-      let numericValues: number[] = [];
-
-      if (traces.length === 1 && (firstTrace.x || firstTrace.labels)) {
-        categories = Array.isArray(firstTrace.x) ? firstTrace.x.map(String) : (Array.isArray(firstTrace.labels) ? firstTrace.labels.map(String) : []);
-        numericValues = Array.isArray(firstTrace.y) ? firstTrace.y.map(Number) : (Array.isArray(firstTrace.values) ? firstTrace.values.map(Number) : []);
-      } else if (traces.length > 1) {
-        categories = traces.map(t => String(t.name || t.x?.[0] || ''));
-        numericValues = traces.map(t => Number(t.y?.[0] || t.values?.[0] || 0));
-      }
-
-      const count = Math.min(categories.length, numericValues.length);
-      const cleanVals = numericValues.slice(0, count).map(v => isNaN(v) ? 0 : v);
-      const maxVal = Math.max(...cleanVals, 1);
-
       const plotLeft = 90;
       const plotRight = 960;
-      const plotTop = 70;
+      const plotTop = datasets.length > 1 ? 90 : 70;
       const plotBottom = 490;
       const plotWidth = plotRight - plotLeft;
       const plotHeight = plotBottom - plotTop;
 
-      // Draw 5 horizontal Y-axis gridlines
+      let maxVal = 0;
+      datasets.forEach(ds => {
+        if (Array.isArray(ds.data)) {
+          ds.data.forEach((v: any) => {
+            const n = Number(v) || 0;
+            if (n > maxVal) maxVal = n;
+          });
+        }
+      });
+      if (maxVal <= 0) maxVal = 1;
+
+      // Draw multi-series legend at top if multiple datasets exist
+      if (datasets.length > 1) {
+        let legendX = plotLeft;
+        const legendY = 60;
+        datasets.forEach((ds, idx) => {
+          const dsLabel = escapeXml(ds.label || `Series ${idx + 1}`);
+          const dsColor = ds.borderColor || ds.backgroundColor || palette[idx % palette.length];
+          const colorStr = typeof dsColor === 'string' ? dsColor : palette[idx % palette.length];
+
+          if (chartType === 'line') {
+            svgElements += `<line x1="${legendX}" y1="${legendY}" x2="${legendX + 16}" y2="${legendY}" stroke="${colorStr}" stroke-width="3"/>\n`;
+            svgElements += `<circle cx="${legendX + 8}" cy="${legendY}" r="4" fill="${colorStr}"/>\n`;
+          } else {
+            svgElements += `<rect x="${legendX}" y="${legendY - 6}" width="14" height="14" fill="${colorStr}" rx="2"/>\n`;
+          }
+          svgElements += `<text x="${legendX + 22}" y="${legendY + 4}" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" fill="#374151">${dsLabel}</text>\n`;
+          legendX += Math.max(120, dsLabel.length * 8 + 36);
+        });
+      }
+
+      // 5 horizontal Y-axis gridlines
       for (let step = 0; step <= 4; step++) {
         const gridY = plotBottom - (step / 4) * plotHeight;
         const gridVal = (step / 4) * maxVal;
-        const valStr = gridVal >= 1000 ? Math.round(gridVal).toLocaleString() : gridVal.toFixed(0);
+        const valStr = gridVal >= 1000 ? Math.round(gridVal).toLocaleString() : (gridVal % 1 === 0 ? gridVal.toFixed(0) : gridVal.toFixed(1));
 
         svgElements += `<line x1="${plotLeft}" y1="${gridY.toFixed(2)}" x2="${plotRight}" y2="${gridY.toFixed(2)}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/>\n`;
         svgElements += `<text x="${plotLeft - 10}" y="${(gridY + 4).toFixed(2)}" text-anchor="end" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#6b7280">${valStr}</text>\n`;
@@ -632,45 +628,67 @@ export class PlotlyChart extends LitElement {
       const xAxisTitle = escapeXml(this.layout?.xaxis?.title?.text || this.layout?.xaxis?.title || 'Categories');
       svgElements += `<text x="${(plotLeft + plotWidth / 2).toFixed(2)}" y="585" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600" fill="#374151">${xAxisTitle}</text>\n`;
 
-      if (count > 0) {
-        const groupWidth = plotWidth / count;
-        const barWidth = Math.max(3, Math.min(36, groupWidth * 0.72));
+      const catCount = labels.length;
+      if (catCount > 0) {
+        const groupWidth = plotWidth / catCount;
 
         if (chartType === 'line') {
-          // Pure Vector Line Chart
-          let pointsAttr = '';
-          cleanVals.forEach((val, i) => {
-            const px = plotLeft + i * groupWidth + groupWidth / 2;
-            const py = plotBottom - (val / maxVal) * plotHeight;
-            pointsAttr += `${px.toFixed(2)},${py.toFixed(2)} `;
-            svgElements += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="4" fill="#0969da" stroke="#ffffff" stroke-width="1.5"/>\n`;
+          // Line Chart / Trend Graph
+          datasets.forEach((ds, dsIdx) => {
+            const color = ds.borderColor || ds.backgroundColor || palette[dsIdx % palette.length];
+            const colorStr = typeof color === 'string' ? color : palette[dsIdx % palette.length];
+            const dataArr = Array.isArray(ds.data) ? ds.data : [];
+            let pointsAttr = '';
 
-            // X-axis Label (rotated if > 8 items or long)
-            const labelStr = escapeXml(categories[i] || `Item ${i + 1}`);
+            dataArr.forEach((valRaw: any, i: number) => {
+              if (i >= catCount) return;
+              const val = Number(valRaw) || 0;
+              const px = plotLeft + i * groupWidth + groupWidth / 2;
+              const py = plotBottom - (val / maxVal) * plotHeight;
+              pointsAttr += `${px.toFixed(2)},${py.toFixed(2)} `;
+              svgElements += `<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="3.5" fill="${colorStr}" stroke="#ffffff" stroke-width="1.5"/>\n`;
+            });
+            svgElements += `<polyline points="${pointsAttr.trim()}" fill="none" stroke="${colorStr}" stroke-width="2.5"/>\n`;
+          });
+
+          labels.forEach((catLabel, i) => {
+            const px = plotLeft + i * groupWidth + groupWidth / 2;
+            const labelStr = escapeXml(catLabel);
             const textX = px.toFixed(2);
-            if (count > 8) {
-              const truncatedLabel = labelStr.length > 20 ? labelStr.substring(0, 18) + '…' : labelStr;
+            if (catCount > 8) {
+              const truncatedLabel = labelStr.length > 18 ? labelStr.substring(0, 16) + '…' : labelStr;
               svgElements += `<text x="${textX}" y="508" text-anchor="end" transform="rotate(-40 ${textX} 508)" font-family="Inter, system-ui, sans-serif" font-size="10" fill="#4b5563">${truncatedLabel}</text>\n`;
             } else {
               svgElements += `<text x="${textX}" y="512" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#4b5563">${labelStr}</text>\n`;
             }
           });
-          svgElements += `<polyline points="${pointsAttr.trim()}" fill="none" stroke="#0969da" stroke-width="2.5"/>\n`;
         } else {
-          // Pure Vector Bar Chart
-          cleanVals.forEach((val, i) => {
-            const bx = plotLeft + i * groupWidth + (groupWidth - barWidth) / 2;
-            const bh = (val / maxVal) * plotHeight;
-            const by = plotBottom - bh;
-            const barColor = palette[i % palette.length];
+          // Bar Chart (Single or Grouped Multi-Series)
+          const numDatasets = datasets.length;
+          const slotWidth = groupWidth * 0.8;
+          const subBarWidth = Math.max(2, Math.min(28, slotWidth / numDatasets));
+          const groupPadding = (groupWidth - (subBarWidth * numDatasets)) / 2;
 
-            svgElements += `<rect x="${bx.toFixed(2)}" y="${by.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${bh.toFixed(2)}" fill="${barColor}" rx="2" ry="2"/>\n`;
+          labels.forEach((catLabel, i) => {
+            datasets.forEach((ds, dsIdx) => {
+              const dataArr = Array.isArray(ds.data) ? ds.data : [];
+              const val = Number(dataArr[i]) || 0;
+              const dsColor = ds.backgroundColor;
+              const barColor = Array.isArray(dsColor)
+                ? (dsColor[i % dsColor.length] || palette[i % palette.length])
+                : (typeof dsColor === 'string' ? dsColor : palette[dsIdx % palette.length]);
 
-            // X-axis Label (rotated if > 8 items or long)
-            const labelStr = escapeXml(categories[i] || `Item ${i + 1}`);
-            const textX = (bx + barWidth / 2).toFixed(2);
-            if (count > 8) {
-              const truncatedLabel = labelStr.length > 20 ? labelStr.substring(0, 18) + '…' : labelStr;
+              const bx = plotLeft + i * groupWidth + groupPadding + dsIdx * subBarWidth;
+              const bh = (val / maxVal) * plotHeight;
+              const by = plotBottom - bh;
+
+              svgElements += `<rect x="${bx.toFixed(2)}" y="${by.toFixed(2)}" width="${subBarWidth.toFixed(2)}" height="${bh.toFixed(2)}" fill="${barColor}" rx="1.5"/>\n`;
+            });
+
+            const labelStr = escapeXml(catLabel);
+            const textX = (plotLeft + i * groupWidth + groupWidth / 2).toFixed(2);
+            if (catCount > 8) {
+              const truncatedLabel = labelStr.length > 18 ? labelStr.substring(0, 16) + '…' : labelStr;
               svgElements += `<text x="${textX}" y="508" text-anchor="end" transform="rotate(-40 ${textX} 508)" font-family="Inter, system-ui, sans-serif" font-size="10" fill="#4b5563">${truncatedLabel}</text>\n`;
             } else {
               svgElements += `<text x="${textX}" y="512" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" fill="#4b5563">${labelStr}</text>\n`;
@@ -696,7 +714,7 @@ export class PlotlyChart extends LitElement {
   public downloadSVG(filename = 'chart') {
     try {
       const svgString = this.generatePureVectorSVG(filename);
-      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.download = `${filename}.svg`;
@@ -710,10 +728,7 @@ export class PlotlyChart extends LitElement {
 
   public async downloadPDF(filename = 'chart') {
     try {
-      // Generate pure vector SVG string
       const svgString = this.generatePureVectorSVG(filename);
-
-      // Parse SVG string to DOM element
       const parser = new DOMParser();
       const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
       const svgElement = svgDoc.documentElement;
@@ -722,7 +737,6 @@ export class PlotlyChart extends LitElement {
         throw new Error('Failed to parse SVG string for vector PDF generation');
       }
 
-      // Create landscape A4 PDF (297mm x 210mm)
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -749,7 +763,6 @@ export class PlotlyChart extends LitElement {
       const x = (pdfWidth - fitW) / 2;
       const y = (pdfHeight - fitH) / 2;
 
-      // Draw pure vector elements directly into PDF stream
       await svg2pdf(svgElement, pdf, {
         x: x,
         y: y,
@@ -764,39 +777,25 @@ export class PlotlyChart extends LitElement {
   }
 
   public exportDataCSV(filename = 'chart_data') {
-    if (!this.data || this.data.length === 0) return;
-
     try {
-      const rows: string[] = [];
-      const traces = this.data;
+      const config = this._buildChartConfig();
+      const labels: string[] = config.data?.labels || [];
+      const datasets: any[] = config.data?.datasets || [];
 
-      if (traces.length === 1 && (traces[0].labels || traces[0].x)) {
-        const trace = traces[0];
-        if (trace.type === 'pie' && trace.labels && trace.values) {
-          rows.push('Label,Value');
-          for (let i = 0; i < trace.labels.length; i++) {
-            rows.push(`"${String(trace.labels[i]).replace(/"/g, '""')}",${trace.values[i]}`);
-          }
-        } else if (trace.x && trace.y) {
-          const xName = trace.name || 'Category';
-          const yName = trace.name || 'Value';
-          rows.push(`"${xName}","${yName}"`);
-          for (let i = 0; i < trace.x.length; i++) {
-            rows.push(`"${String(trace.x[i]).replace(/"/g, '""')}",${trace.y[i]}`);
-          }
-        }
-      } else {
-        const traceNames = traces.map((t, idx) => t.name || `Series ${idx + 1}`);
-        rows.push(`"Category",${traceNames.map(n => `"${n.replace(/"/g, '""')}"`).join(',')}`);
-        const refTrace = traces[0];
-        if (refTrace && refTrace.x) {
-          for (let i = 0; i < refTrace.x.length; i++) {
-            const xVal = refTrace.x[i];
-            const yVals = traces.map(t => (t.y && t.y[i] !== undefined ? t.y[i] : ''));
-            rows.push(`"${String(xVal).replace(/"/g, '""')}",${yVals.join(',')}`);
-          }
-        }
-      }
+      if (labels.length === 0 || datasets.length === 0) return;
+
+      const rows: string[] = [];
+      const dsLabels = datasets.map((ds, idx) => ds.label || `Series ${idx + 1}`);
+
+      rows.push(`"Category",${dsLabels.map(l => `"${String(l).replace(/"/g, '""')}"`).join(',')}`);
+
+      labels.forEach((label, i) => {
+        const valCells = datasets.map(ds => {
+          const val = ds.data?.[i];
+          return val !== undefined && val !== null ? val : '';
+        });
+        rows.push(`"${String(label).replace(/"/g, '""')}",${valCells.join(',')}`);
+      });
 
       const csvBlob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
