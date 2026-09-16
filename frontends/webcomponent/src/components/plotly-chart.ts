@@ -335,6 +335,15 @@ export class PlotlyChart extends LitElement {
     const options: any = {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: chartType === 'doughnut' ? 'nearest' : 'index',
+        intersect: chartType === 'doughnut',
+        axis: 'x'
+      },
+      hover: {
+        mode: chartType === 'doughnut' ? 'nearest' : 'index',
+        intersect: chartType === 'doughnut'
+      },
       layout: {
         padding: {
           bottom: 0,
@@ -391,6 +400,8 @@ export class PlotlyChart extends LitElement {
         },
         tooltip: {
           enabled: true,
+          mode: chartType === 'doughnut' ? 'nearest' : 'index',
+          intersect: chartType === 'doughnut',
           backgroundColor: 'rgba(17, 24, 39, 0.9)',
           titleFont: { family: 'Inter, system-ui, sans-serif', size: 12, weight: 'bold' },
           bodyFont: { family: 'Inter, system-ui, sans-serif', size: 12 },
