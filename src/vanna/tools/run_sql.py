@@ -105,15 +105,7 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
                 # Handle SELECT queries with results
                 if df.empty:
                     result = "Query executed successfully. No rows returned."
-                    ui_component = UiComponent(
-                        rich_component=DataFrameComponent(
-                            rows=[],
-                            columns=[],
-                            title="Query Results",
-                            description="No rows returned",
-                        ),
-                        simple_component=SimpleTextComponent(text=result),
-                    )
+                    ui_component = None
                     metadata = {
                         "row_count": 0,
                         "columns": [],

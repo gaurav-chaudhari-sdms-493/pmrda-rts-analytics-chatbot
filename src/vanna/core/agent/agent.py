@@ -18,6 +18,7 @@ from vanna.components import (
     TaskTrackerUpdateComponent,
     ChatInputUpdateComponent,
     StatusCardComponent,
+    ButtonComponent,
     Task,
 )
 from .config import AgentConfig
@@ -1153,6 +1154,24 @@ class Agent:
                     metadata=metadata_dict,
                 )
 
+                # Determine final text response content
+                final_text_content = response.content.strip() if (response.content and response.content.strip()) else ""
+                if not final_text_content and executed_tool_names:
+                    final_text_content = "Is query ke liye koi matching records / data nahi mil paya."
+
+                # Yield final text response FIRST so it appears before developer info
+                if final_text_content:
+                    conversation.add_message(
+                        Message(role="assistant", content=final_text_content)
+                    )
+                    yield UiComponent(
+                        rich_component=RichTextComponent(
+                            content=final_text_content, markdown=True
+                        ),
+                        simple_component=SimpleTextComponent(text=final_text_content),
+                    )
+
+                # Yield timing card (Developer Info) AFTER final text response
                 yield UiComponent(
                     rich_component=timing_card,
                     simple_component=SimpleTextComponent(
@@ -1175,19 +1194,6 @@ class Agent:
                         placeholder="Ask a follow-up question...", disabled=False
                     )
                 )
-
-                # Yield final text response
-                if response.content:
-                    # Add assistant response to conversation
-                    conversation.add_message(
-                        Message(role="assistant", content=response.content)
-                    )
-                    yield UiComponent(
-                        rich_component=RichTextComponent(
-                            content=response.content, markdown=True
-                        ),
-                        simple_component=SimpleTextComponent(text=response.content),
-                    )
                 break
 
         # Check if we hit the tool iteration limit
@@ -1201,32 +1207,44 @@ class Agent:
             yield UiComponent(  # type: ignore
                 rich_component=StatusBarUpdateComponent(
                     status="warning",
-                    message="Tool limit reached",
-                    detail=f"Stopped after {tool_iterations} tool executions. The task may be incomplete.",
+                    message="Search loop limit reached",
+                    detail=f"Stopped after {tool_iterations} tool executions.",
                 )
             )
 
             # Provide detailed warning message to user
-            warning_message = f"""⚠️ **Tool Execution Limit Reached**
+            warning_message = f"""⚠️ **Search Loop Limit Reached**
 
-The agent stopped after executing {tool_iterations} tools (the configured maximum). The task may not be fully complete.
+The AI stopped searching because it reached the limit of {tool_iterations} search iterations. It may need more information or continued execution for better results.
 
 You can:
-- Ask me to **continue** where I left off"""
+- Click the **Continue** button below to let the AI resume searching where it left off.
+- Or rephrase/rewrite your question with more specific details to be more informative."""
 
             yield UiComponent(
                 rich_component=RichTextComponent(
                     content=warning_message, markdown=True
                 ),
                 simple_component=SimpleTextComponent(
-                    text=f"Tool limit reached after {tool_iterations} executions. Task may be incomplete."
+                    text=f"Search limit reached after {tool_iterations} executions. Click Continue or rewrite your question."
                 ),
             )
 
-            # Update chat input to suggest follow-up
+            # Yield an interactive 'Continue' button component so the user can click it directly
+            yield UiComponent(
+                rich_component=ButtonComponent(
+                    label="Continue",
+                    action="continue",
+                    variant="primary",
+                    icon="▶️",
+                ),
+                simple_component=SimpleTextComponent(text="[Button: Continue]"),
+            )
+
+            # Update chat input placeholder
             yield UiComponent(  # type: ignore
                 rich_component=ChatInputUpdateComponent(
-                    placeholder="Continue the task or ask me something else...",
+                    placeholder="Click 'Continue' above, or type your own question...",
                     disabled=False,
                 )
             )
