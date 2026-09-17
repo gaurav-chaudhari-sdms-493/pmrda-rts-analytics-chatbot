@@ -559,11 +559,13 @@ export class VannaChat extends LitElement {
       this.componentManager = new ComponentManager(richContainer);
       this.componentObserver = new MutationObserver(() => {
         this.updateEmptyState();
+        this.scrollToLastMessage();
       });
       
       this.componentObserver.observe(richContainer, {
         childList: true,
         subtree: true,
+        characterData: true,
         attributes: false
       });
     }
@@ -671,7 +673,10 @@ export class VannaChat extends LitElement {
       this.componentManager.processUpdate(update);
     }
 
-    setTimeout(() => this.updateEmptyState(), 0);
+    setTimeout(() => {
+      this.updateEmptyState();
+      this.scrollToLastMessage();
+    }, 0);
     this.setStatus('working', 'Thinking...', '');
 
     if (messageText === this.currentMessage) {
@@ -831,6 +836,8 @@ export class VannaChat extends LitElement {
         this.addMessage(text, 'assistant');
       }
     }
+
+    this.scrollToLastMessage();
   }
 
   private generateId(): string {
@@ -851,6 +858,18 @@ export class VannaChat extends LitElement {
 
   setCustomHeaders(headers: Record<string, string>) {
     this.apiClient.setCustomHeaders(headers);
+  }
+
+  scrollToLastMessage(smooth: boolean = true) {
+    const chatMessages = this.shadowRoot?.querySelector('.chat-messages') as HTMLElement;
+    if (chatMessages) {
+      requestAnimationFrame(() => {
+        chatMessages.scrollTo({
+          top: chatMessages.scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto'
+        });
+      });
+    }
   }
 
   private updateEmptyState() {

@@ -3056,6 +3056,7 @@ export class ComponentManager {
       const component = this.normalizeComponent(update.component);
       this.registry.update(element, component, update.updates);
       this.components.set(update.target_id, component);
+      this.triggerScroll();
     }
   }
 
@@ -3076,6 +3077,7 @@ export class ComponentManager {
         this.elements.delete(update.target_id);
         this.components.delete(update.target_id);
       }
+      this.triggerScroll();
     }
   }
 
@@ -3134,10 +3136,19 @@ export class ComponentManager {
   }
 
   private triggerScroll(): void {
-    // Find the parent vanna-chat component and trigger its scroll method
-    const vannaChat = document.querySelector('vanna-chat') as any;
+    // Find parent vanna-chat component via shadow DOM or document query
+    let vannaChat: any = this.container.closest('vanna-chat');
+    if (!vannaChat) {
+      const rootNode = this.container.getRootNode();
+      if (rootNode && rootNode instanceof ShadowRoot) {
+        vannaChat = (rootNode.host as HTMLElement).closest('vanna-chat') || rootNode.host;
+      }
+    }
+    if (!vannaChat) {
+      vannaChat = document.querySelector('vanna-chat');
+    }
+
     if (vannaChat && typeof vannaChat.scrollToLastMessage === 'function') {
-      // Use requestAnimationFrame to wait for DOM update
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           vannaChat.scrollToLastMessage();
