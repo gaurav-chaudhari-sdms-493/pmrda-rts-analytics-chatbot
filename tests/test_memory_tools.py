@@ -78,36 +78,20 @@ class TestMemoryToolDetailedResults:
 
         # Verify result
         assert result.success is True
-        assert result.ui_component is not None
-        assert result.ui_component.rich_component is not None
-
-        # Check that it's a CardComponent (detailed view)
-        assert result.ui_component.rich_component.type == ComponentType.CARD
-
-        # Check collapsible properties
-        card = result.ui_component.rich_component
-        assert card.collapsible is True
-        assert card.collapsed is True  # Should start collapsed
-
-        # Verify content includes detailed information
-        assert "Retrieved memories passed to LLM" in card.content
-        assert "run_sql" in card.content
-        assert "similarity:" in card.content.lower()
-        assert "Question:" in card.content
-        assert "Arguments:" in card.content
+        assert result.ui_component is None
 
     @pytest.mark.asyncio
     async def test_non_admin_sees_simple_status(
         self, search_tool, demo_agent_memory, regular_user
     ):
-        """Test that non-admin users see simple status message."""
-        # Create context with regular user (no detailed results feature)
+        """Test that memory search returns ui_component=None."""
+        # Create context with regular user
         context = ToolContext(
             user=regular_user,
             conversation_id=str(uuid.uuid4()),
             request_id=str(uuid.uuid4()),
             agent_memory=demo_agent_memory,
-            metadata={"ui_features_available": []},  # No detailed results feature
+            metadata={"ui_features_available": []},
         )
 
         # Save some memories
@@ -128,24 +112,13 @@ class TestMemoryToolDetailedResults:
 
         # Verify result
         assert result.success is True
-        assert result.ui_component is not None
-        assert result.ui_component.rich_component is not None
-
-        # Check that it's a StatusBarUpdateComponent (simple view)
-        assert (
-            result.ui_component.rich_component.type == ComponentType.STATUS_BAR_UPDATE
-        )
-
-        # Verify it shows success message
-        status = result.ui_component.rich_component
-        assert status.status == "success"
-        assert "similar pattern" in status.message.lower()
+        assert result.ui_component is None
 
     @pytest.mark.asyncio
     async def test_detailed_results_include_all_memory_fields(
         self, search_tool, demo_agent_memory, admin_user
     ):
-        """Test that detailed results include all relevant memory fields."""
+        """Test that memory search returns results for LLM with ui_component=None."""
         # Create context with admin user and feature enabled
         context = ToolContext(
             user=admin_user,
@@ -175,25 +148,20 @@ class TestMemoryToolDetailedResults:
 
         result = await search_tool.execute(context, search_params)
 
-        # Verify detailed content
-        card = result.ui_component.rich_component
-        content = card.content
+        # Verify content passed to LLM
+        content = result.result_for_llm
+        assert result.ui_component is None
 
-        # Check for all expected fields
+        # Check for all expected fields in LLM result
         assert "Question:" in content
         assert "Show me customer names" in content
-        assert "Arguments:" in content
         assert "run_sql" in content
-        assert "similarity:" in content.lower()
-
-        # Timestamp and ID should be included if available
-        # (DemoAgentMemory might not set these, but the code should handle them)
 
     @pytest.mark.asyncio
     async def test_no_results_works_for_both_admin_and_user(
         self, search_tool, demo_agent_memory, admin_user, regular_user
     ):
-        """Test that admin sees card with 0 results while regular user sees status bar."""
+        """Test that memory search returns 0 results to LLM with ui_component=None."""
         # Test with admin
         admin_context = ToolContext(
             user=admin_user,
@@ -217,10 +185,7 @@ class TestMemoryToolDetailedResults:
 
         assert admin_result.success is True
         assert "No similar tool usage patterns found" in admin_result.result_for_llm
-        # Admin should see a card showing 0 results
-        assert admin_result.ui_component.rich_component.type == ComponentType.CARD
-        assert "0 Results" in admin_result.ui_component.rich_component.title
-        assert admin_result.ui_component.rich_component.collapsible is True
+        assert admin_result.ui_component is None
 
         # Test with regular user
         user_context = ToolContext(
@@ -235,11 +200,7 @@ class TestMemoryToolDetailedResults:
 
         assert user_result.success is True
         assert "No similar tool usage patterns found" in user_result.result_for_llm
-        # Regular user should see a status bar update
-        assert (
-            user_result.ui_component.rich_component.type
-            == ComponentType.STATUS_BAR_UPDATE
-        )
+        assert user_result.ui_component is None
 
     @pytest.mark.asyncio
     async def test_llm_result_same_for_admin_and_user(

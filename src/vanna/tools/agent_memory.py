@@ -148,46 +148,10 @@ class SearchSavedCorrectToolUsesTool(Tool[SearchSavedCorrectToolUsesParams]):
                 no_results_msg = (
                     "No similar tool usage patterns found for this question."
                 )
-
-                # Check if user has access to detailed memory results
-                ui_features_available = context.metadata.get(
-                    "ui_features_available", []
-                )
-                show_detailed_results = (
-                    UiFeature.UI_FEATURE_SHOW_MEMORY_DETAILED_RESULTS
-                    in ui_features_available
-                )
-
-                # Create UI component based on access level
-                if show_detailed_results:
-                    # Admin view: Show card indicating 0 results
-                    ui_component = UiComponent(
-                        rich_component=CardComponent(
-                            title="🧠 Memory Search: 0 Results",
-                            content="No similar tool usage patterns found for this question.\n\nSearched agent memory with no matches.",
-                            icon="🔍",
-                            status="info",
-                            collapsible=True,
-                            collapsed=True,
-                            markdown=True,
-                        ),
-                        simple_component=None,
-                    )
-                else:
-                    # Non-admin view: Simple status message
-                    ui_component = UiComponent(
-                        rich_component=StatusBarUpdateComponent(
-                            status="idle",
-                            message="No similar patterns found",
-                            detail="Searched agent memory",
-                        ),
-                        simple_component=None,
-                    )
-
                 return ToolResult(
                     success=True,
                     result_for_llm=no_results_msg,
-                    ui_component=ui_component,
+                    ui_component=None,
                 )
 
             # Format results for LLM
@@ -200,55 +164,10 @@ class SearchSavedCorrectToolUsesTool(Tool[SearchSavedCorrectToolUsesParams]):
 
             logger.info(f"Agent memory search results: {results_text.strip()}")
 
-            # Check if user has access to detailed memory results
-            ui_features_available = context.metadata.get("ui_features_available", [])
-            show_detailed_results = (
-                UiFeature.UI_FEATURE_SHOW_MEMORY_DETAILED_RESULTS
-                in ui_features_available
-            )
-
-            # Create UI component based on access level
-            if show_detailed_results:
-                # Admin view: Show detailed results in collapsible card
-                detailed_content = "**Retrieved memories passed to LLM:**\n\n"
-                for i, result in enumerate(results, 1):
-                    memory = result.memory
-                    detailed_content += f"**{i}. {memory.tool_name}** (similarity: {result.similarity_score:.2f})\n"
-                    detailed_content += f"- **Question:** {memory.question}\n"
-                    detailed_content += f"- **Arguments:** `{memory.args}`\n"
-                    if memory.timestamp:
-                        detailed_content += f"- **Timestamp:** {memory.timestamp}\n"
-                    if memory.memory_id:
-                        detailed_content += f"- **ID:** `{memory.memory_id}`\n"
-                    detailed_content += "\n"
-
-                ui_component = UiComponent(
-                    rich_component=CardComponent(
-                        title=f"🧠 Memory Search: {len(results)} Result(s)",
-                        content=detailed_content.strip(),
-                        icon="🔍",
-                        status="info",
-                        collapsible=True,
-                        collapsed=True,  # Start collapsed to avoid clutter
-                        markdown=True,  # Render content as markdown
-                    ),
-                    simple_component=None,
-                )
-            else:
-                # Non-admin view: Simple status message
-                ui_component = UiComponent(
-                    rich_component=StatusBarUpdateComponent(
-                        status="success",
-                        message=f"Found {len(results)} similar pattern(s)",
-                        detail="Retrieved from agent memory",
-                    ),
-                    simple_component=None,
-                )
-
             return ToolResult(
                 success=True,
                 result_for_llm=results_text.strip(),
-                ui_component=ui_component,
+                ui_component=None,
             )
 
         except Exception as e:
@@ -256,12 +175,7 @@ class SearchSavedCorrectToolUsesTool(Tool[SearchSavedCorrectToolUsesParams]):
             return ToolResult(
                 success=False,
                 result_for_llm=error_message,
-                ui_component=UiComponent(
-                    rich_component=StatusBarUpdateComponent(
-                        status="error", message="Failed to search memory", detail=str(e)
-                    ),
-                    simple_component=None,
-                ),
+                ui_component=None,
                 error=str(e),
             )
 
