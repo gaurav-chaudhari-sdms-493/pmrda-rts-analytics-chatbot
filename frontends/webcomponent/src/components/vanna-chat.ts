@@ -564,8 +564,8 @@ export class VannaChat extends LitElement {
       
       this.componentObserver.observe(richContainer, {
         childList: true,
-        subtree: true,
-        characterData: true,
+        subtree: false,
+        characterData: false,
         attributes: false
       });
     }

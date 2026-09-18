@@ -838,7 +838,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         chartElement.addEventListener('chart-click', (evt: CustomEvent) => {
           const clickedLabel = evt.detail?.label;
           if (clickedLabel) {
-            const searchInput = container.querySelector('.grid-search-input') as HTMLInputElement;
+            const searchInput = container.querySelector('.search-input') as HTMLInputElement;
             if (searchInput) {
               searchInput.value = String(clickedLabel);
             }
@@ -1010,6 +1010,21 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       if (!serverSuccess) {
         computeClientFallback();
+      }
+
+      // Capture active search input state AFTER network fetch completes so typing during fetch is preserved
+      const currentSearchInput = container.querySelector('.search-input') as HTMLInputElement;
+      const rootNode = container.getRootNode();
+      const isSearchFocused = currentSearchInput && (
+        document.activeElement === currentSearchInput ||
+        (rootNode instanceof ShadowRoot && rootNode.activeElement === currentSearchInput)
+      );
+      const liveValue = currentSearchInput ? currentSearchInput.value : state.globalSearch;
+      const selectionStart = currentSearchInput ? currentSearchInput.selectionStart : null;
+      const selectionEnd = currentSearchInput ? currentSearchInput.selectionEnd : null;
+
+      if (currentSearchInput && liveValue !== state.globalSearch) {
+        state.globalSearch = liveValue;
       }
 
       const totalPages = state.pageSize === 'all'
@@ -1202,6 +1217,18 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       // Re-bind interactive event listeners
       bindEvents();
+
+      if (isSearchFocused) {
+        const newSearchInput = container.querySelector('.search-input') as HTMLInputElement;
+        if (newSearchInput) {
+          newSearchInput.focus({ preventScroll: true });
+          if (selectionStart !== null && selectionEnd !== null) {
+            try {
+              newSearchInput.setSelectionRange(selectionStart, selectionEnd);
+            } catch {}
+          }
+        }
+      }
 
       if (!showTable) {
         requestAnimationFrame(() => {
@@ -1518,7 +1545,7 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
 
       const searchInput = popup.querySelector('.jetbrains-filter-search') as HTMLInputElement;
       if (searchInput) {
-        searchInput.focus();
+        searchInput.focus({ preventScroll: true });
         searchInput.selectionStart = searchInput.selectionEnd = searchInput.value.length;
 
         searchInput.addEventListener('input', (e) => {
@@ -1601,13 +1628,19 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
     };
 
     renderPopupContent();
+    popup.addEventListener('click', (e) => e.stopPropagation());
     container.appendChild(popup);
 
     const onClickOutside = (e: MouseEvent) => {
-      if (!popup.contains(e.target as Node) && !targetBtn.contains(e.target as Node)) {
-        popup.remove();
-        document.removeEventListener('click', onClickOutside);
+      const path = e.composedPath ? e.composedPath() : [];
+      if (path.includes(popup) || path.includes(targetBtn)) {
+        return;
       }
+      if (popup.contains(e.target as Node) || targetBtn.contains(e.target as Node)) {
+        return;
+      }
+      popup.remove();
+      document.removeEventListener('click', onClickOutside);
     };
     setTimeout(() => {
       document.addEventListener('click', onClickOutside);

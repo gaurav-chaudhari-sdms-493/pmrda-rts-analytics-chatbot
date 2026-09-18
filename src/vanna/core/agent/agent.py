@@ -1155,7 +1155,39 @@ class Agent:
                 )
 
                 # Determine final text response content
-                final_text_content = response.content.strip() if (response.content and response.content.strip()) else ""
+                raw_text = response.content.strip() if (response.content and response.content.strip()) else ""
+                
+                # Sanitize out any leaked internal model thinking monologue
+                final_text_content = raw_text
+                if raw_text:
+                    import re
+                    # Remove <thought>...</thought> blocks if emitted
+                    cleaned = re.sub(r"<thought>.*?</thought>", "", raw_text, flags=re.DOTALL)
+                    
+                    thinking_phrases = [
+                        "Here the user wants", "I need to output", "However, there's a strict rule",
+                        "The rule says", "Let me think", "I'll respond with", "Let's output:",
+                        "Given the strict rule", "Better to output", "I could provide a simple"
+                    ]
+                    if any(phrase.lower() in cleaned.lower() for phrase in thinking_phrases):
+                        # Extract the actual final answer part after thinking monologue
+                        # Look for common final answer start markers
+                        match = re.search(
+                            r"(?:Here are|Here is|Below is|Note:|\n\n###|\n\n\*\*|\|[^\n]+\|[^\n]*\n|[A-Z\u0900-\u097F][^\n]+:\n).*",
+                            cleaned,
+                            flags=re.DOTALL | re.IGNORECASE
+                        )
+                        if match:
+                            cleaned = match.group(0)
+                        else:
+                            # Fallback: remove lines matching thinking phrases
+                            cleaned_lines = [
+                                line for line in cleaned.split("\n")
+                                if not any(phrase.lower() in line.lower() for phrase in thinking_phrases)
+                            ]
+                            cleaned = "\n".join(cleaned_lines)
+                    final_text_content = cleaned.strip()
+
                 if not final_text_content and executed_tool_names:
                     final_text_content = "Is query ke liye koi matching records / data nahi mil paya."
 
