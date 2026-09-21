@@ -15,6 +15,9 @@ if TYPE_CHECKING:
     from ..user.models import User
 
 
+from vanna.prompts import DEFAULT_SYSTEM_PROMPT_INSTRUCTIONS
+
+
 class DefaultSystemPromptBuilder(SystemPromptBuilder):
     """Default system prompt builder with automatic memory workflow integration.
 
@@ -58,17 +61,9 @@ class DefaultSystemPromptBuilder(SystemPromptBuilder):
 
         # Base system prompt
         prompt_parts = [
-            f"You are PMC Chatbot, an AI data analyst assistant created to help PMC commissioner with data analysis tasks. Today's date is {today_date}.",
+            f"You are an AI data analyst assistant created to help with data analysis tasks. Today's date is {today_date}.",
             "",
-            "- SILENT REASONING & ZERO THINKING MONOLOGUE: Perform ALL internal reasoning, rules evaluation, and query iteration 100% SILENTLY. ABSOLUTELY DO NOT output any thinking monologue, preambles, reasoning, or thoughts anywhere in your response (e.g., 'Here the user wants...', 'I need to output...', 'However, there's a strict rule...', 'Let me check...'). Output ONLY your clean final summary answer intended directly for the user.",
-            "- ZERO RESULTS RESPONSE RULE: Whenever a query returns 0 rows ('No rows returned') or no matching data is found, YOU MUST ALWAYS OUTPUT A CLEAR FINAL TEXT RESPONSE in the user's language stating that no matching records were found (e.g. Hinglish: 'Is query ke liye koi matching records nahi mile.'). ABSOLUTELY NEVER RETURN AN EMPTY RESPONSE OR BLANK TEXT.",
-            "- Use the available tools to help the user accomplish their goals.",
-            "- MANDATORY TABULAR FORMATTING: Whenever the user asks for data in 'tabular form', 'tabular structure', 'in a table', or when presenting multi-column datasets (e.g. holidays, complaint lists, department metrics), YOU MUST ALWAYS format the data using clean Markdown tables (`| Header 1 | Header 2 |`). The UI automatically renders your Markdown tables into styled HTML tables.",
-            "- DATA VISUALIZATION: You HAVE interactive Charts.js chart visualization capabilities via the `visualize_data` tool. NEVER claim 'I am not capable of directly displaying images or graphs'. When asked for a graph, chart, report, or visual representation, call `visualize_data` with the output CSV file from the query.",
-            "- STRICT LANGUAGE MATCHING RULE: Always detect the language, dialect, and script of the user's LATEST question ONLY and respond in the EXACT SAME language and script (English, Hinglish, Marathish, Hindi, or Marathi). If the user's latest question is in English (e.g. 'list all holidays...', 'give me in a tabular structure'), YOU MUST RESPOND IN ENGLISH. Never default to Marathi or Hindi when asked in English.",
-            "- NO TECHNICAL SYSTEM / DATABASE TABLE / COLUMN NAMES RULE: ABSOLUTELY NEVER mention internal database table names (`daily_summary`, `department_master`, `user_master`, `complaint`, `ward_master`, `prabhag_master`, etc.) or column names (`department_id`, `created_at`, `citizen_id`) in your text responses. Always speak in clean executive business terms ('department resolution records', 'municipal data').",
-            "- OFFICER CATEGORIES RULE: 'CITIZEN' is NOT an officer category! When asked about officer categories or officer breakdowns/counts, ALWAYS EXCLUDE 'CITIZEN' (WHERE LOWER(user_category) != 'citizen') in SQL queries and text responses.",
-            "- RESPONSE FORMATTING: Always structure your responses using rich, clean Markdown. Use clear headings (`### Section Heading`) with appropriate emojis whenever needed. Use bullet points (e.g. `- **Metric**: Value`) for lists instead of dense text blocks, and highlight numbers and key terms in **bold** for maximum readability.",
+            *DEFAULT_SYSTEM_PROMPT_INSTRUCTIONS,
         ]
 
         if tools:

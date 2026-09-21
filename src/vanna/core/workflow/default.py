@@ -27,6 +27,14 @@ from vanna.components import (
 )
 
 # Note: StatusCardComponent and ButtonGroupComponent are kept for /status command compatibility
+from vanna.prompts import (
+    DEFAULT_WORKFLOW_HELP_CONTENT,
+    DEFAULT_HERO_TITLE,
+    DEFAULT_HERO_SUBTITLE,
+    DEFAULT_HERO_DESC,
+    DEFAULT_SUGGESTIONS_HEADER,
+    DEFAULT_SUGGESTED_QUERIES,
+)
 
 
 class DefaultWorkflowHandler(WorkflowHandler):
@@ -39,14 +47,34 @@ class DefaultWorkflowHandler(WorkflowHandler):
     - Provides appropriate setup guidance based on what's missing
     """
 
-    def __init__(self, welcome_message: Optional[str] = None):
-        """Initialize with optional custom welcome message.
+    def __init__(
+        self,
+        welcome_message: Optional[str] = None,
+        help_content: Optional[str] = None,
+        hero_title: Optional[str] = None,
+        hero_subtitle: Optional[str] = None,
+        hero_desc: Optional[str] = None,
+        suggestions_header: Optional[str] = None,
+        suggested_queries: Optional[List[Dict[str, str]]] = None,
+    ):
+        """Initialize with optional custom welcome message and UI texts.
 
         Args:
-            welcome_message: Optional custom welcome message. If not provided,
-                           generates one based on available tools.
+            welcome_message: Optional custom welcome message.
+            help_content: Optional custom help markdown content.
+            hero_title: Optional title for starter hero card.
+            hero_subtitle: Optional subtitle for starter hero card.
+            hero_desc: Optional description for starter hero card.
+            suggestions_header: Optional text header above suggested queries.
+            suggested_queries: Optional list of query chips dicts.
         """
         self.welcome_message = welcome_message
+        self.help_content = help_content or DEFAULT_WORKFLOW_HELP_CONTENT
+        self.hero_title = hero_title or DEFAULT_HERO_TITLE
+        self.hero_subtitle = hero_subtitle or DEFAULT_HERO_SUBTITLE
+        self.hero_desc = hero_desc or DEFAULT_HERO_DESC
+        self.suggestions_header = suggestions_header or DEFAULT_SUGGESTIONS_HEADER
+        self.suggested_queries = suggested_queries or DEFAULT_SUGGESTED_QUERIES
 
     async def try_handle(
         self, agent: "Agent", user: "User", conversation: "Conversation", message: str
@@ -58,34 +86,21 @@ class DefaultWorkflowHandler(WorkflowHandler):
             # Check if user is admin
             is_admin = "admin" in user.group_memberships
 
-            help_content = (
-                "## 🏛️ PMC AI Assistant (पुणे महानगरपालिका AI सहाय्यक)\n\n"
-                "I am your dedicated AI Assistant for Pune Municipal Corporation (PMC) citizen complaint analytics and statistics.\n\n"
-                "**💬 Example Queries (English & Marathi)**\n"
-                '• "Show total complaints count till now" (एकूण तक्रारींची संख्या)\n'
-                '• "Show complaints breakdown by status" (तक्रार स्थितीनुसार वर्गीकरण)\n'
-                '• "Which department received the highest complaints?" (सर्वात जास्त तक्रारी आलेला विभाग)\n'
-                '• "Show complaints registered in last 30 days"\n\n'
-                "**🔧 Commands**\n"
-                "- `/help` - Show this help message\n"
-            )
-
-            if is_admin:
-                help_content += (
+            help_text = self.help_content
+            if is_admin and "\n**🔒 Admin Commands**\n" not in help_text:
+                help_text += (
                     "\n**🔒 Admin Commands**\n"
                     "- `/status` - Check setup status\n"
                     "- `/memories` - View and manage recent memories\n"
                     "- `/delete [id]` - Delete a memory by ID\n"
                 )
 
-            help_content += "\n\nAsk me any question in plain English or Marathi (मराठी)!"
-
             return WorkflowResult(
                 should_skip_llm=True,
                 components=[
                     UiComponent(
                         rich_component=RichTextComponent(
-                            content=help_content,
+                            content=help_text,
                             markdown=True,
                         ),
                         simple_component=None,
@@ -205,7 +220,7 @@ class DefaultWorkflowHandler(WorkflowHandler):
             return self._generate_user_starter_card(analysis)
 
     def _generate_admin_starter_card(self, analysis: Dict[str, Any]) -> UiComponent:
-        """Generate clean, elegant PMC AI Assistant hero starter view."""
+        """Generate clean, elegant hero starter view."""
 
         if not analysis["has_sql"]:
             content = (
@@ -214,56 +229,53 @@ class DefaultWorkflowHandler(WorkflowHandler):
                 "    <span class='pmc-logo-badge'>⚠️</span>"
                 "    <div>"
                 "      <h3 style='margin:0; font-size:1.15rem; color:#b91c1c;'>Setup Required</h3>"
-                "      <p style='margin:4px 0 0 0; color:#64748b; font-size:0.88rem;'>PMC AI Assistant requires a database connection to function.</p>"
+                "      <p style='margin:4px 0 0 0; color:#64748b; font-size:0.88rem;'>Database connection required to function.</p>"
                 "    </div>"
                 "  </div>"
                 "</div>"
             )
         else:
+            chips_html = []
+            for item in self.suggested_queries:
+                q = item.get("query", "")
+                t = item.get("title", q)
+                sub = item.get("subtitle", "")
+                icon = item.get("icon", "💡")
+                sub_html = f"<small>{sub}</small>" if sub else ""
+                chips_html.append(
+                    f"    <button class='pmc-suggestion-chip' data-query='{q}'>\n"
+                    f"      <span class='chip-icon'>{icon}</span>\n"
+                    f"      <div class='chip-text'>\n"
+                    f"        <strong>{t}</strong>\n"
+                    f"        {sub_html}\n"
+                    f"      </div>\n"
+                    f"    </button>"
+                )
+            suggestion_grid = "\n".join(chips_html)
+
+            subtitle_html = (
+                f"<p class='pmc-hero-subtitle'>{self.hero_subtitle}</p>"
+                if self.hero_subtitle
+                else ""
+            )
+
             content = (
-                "<div class='pmc-hero-card'>"
-                "  <div class='pmc-hero-header'>"
-                "    <span class='pmc-logo-badge'>🏛️</span>"
-                "    <div class='pmc-hero-titles'>"
-                "      <h2 class='pmc-hero-title'>PMC AI Assistant</h2>"
-                "      <p class='pmc-hero-subtitle'>पुणे महानगरपालिका AI सहाय्यक</p>"
-                "    </div>"
-                "  </div>"
-                "  <p class='pmc-hero-desc'>"
-                "    Welcome! I can assist you with real-time statistical insights, citizen complaint analytics, and department status for Pune Municipal Corporation."
-                "  </p>"
-                "  <div class='pmc-suggestions-label'>💡 Suggested Queries / काय विचारू शकता:</div>"
-                "  <div class='pmc-suggestion-grid'>"
-                "    <button class='pmc-suggestion-chip' data-query='Show total complaints count till now'>"
-                "      <span class='chip-icon'>📈</span>"
-                "      <div class='chip-text'>"
-                "        <strong>Show total complaints count till now</strong>"
-                "        <small>एकूण तक्रारींची संख्या</small>"
-                "      </div>"
-                "    </button>"
-                "    <button class='pmc-suggestion-chip' data-query='Show complaints breakdown by status'>"
-                "      <span class='chip-icon'>📊</span>"
-                "      <div class='chip-text'>"
-                "        <strong>Show complaints breakdown by status</strong>"
-                "        <small>तक्रार स्थितीनुसार वर्गीकरण</small>"
-                "      </div>"
-                "    </button>"
-                "    <button class='pmc-suggestion-chip' data-query='Which department received the highest complaints?'>"
-                "      <span class='chip-icon'>🏢</span>"
-                "      <div class='chip-text'>"
-                "        <strong>Which department received the highest complaints?</strong>"
-                "        <small>विभागानुसार तक्रारींचे विश्लेषण</small>"
-                "      </div>"
-                "    </button>"
-                "    <button class='pmc-suggestion-chip' data-query='Show recent complaint resolution details'>"
-                "      <span class='chip-icon'>✅</span>"
-                "      <div class='chip-text'>"
-                "        <strong>Show recent complaint resolution details</strong>"
-                "        <small>अलीकडील तक्रारींचे निवारण</small>"
-                "      </div>"
-                "    </button>"
-                "  </div>"
-                "</div>"
+                f"<div class='pmc-hero-card'>\n"
+                f"  <div class='pmc-hero-header'>\n"
+                f"    <span class='pmc-logo-badge'>🏛️</span>\n"
+                f"    <div class='pmc-hero-titles'>\n"
+                f"      <h2 class='pmc-hero-title'>{self.hero_title}</h2>\n"
+                f"      {subtitle_html}\n"
+                f"    </div>\n"
+                f"  </div>\n"
+                f"  <p class='pmc-hero-desc'>\n"
+                f"    {self.hero_desc}\n"
+                f"  </p>\n"
+                f"  <div class='pmc-suggestions-label'>{self.suggestions_header}</div>\n"
+                f"  <div class='pmc-suggestion-grid'>\n"
+                f"{suggestion_grid}\n"
+                f"  </div>\n"
+                f"</div>"
             )
 
         return UiComponent(

@@ -198,11 +198,12 @@ class ChatHandler:
         )
 
 
-        # 3. Log off-topic / unmatched scope query if PMC domain scope rule was triggered
-        if "only answer questions related to Pune Municipal Corporation" in full_agent_response or "मी पीएमसी" in full_agent_response:
+        # 3. Log off-topic / unmatched scope query if domain scope rule was triggered
+        from vanna.prompts import DOMAIN_SCOPE_REJECTION_PHRASES
+        if any(phrase in full_agent_response for phrase in DOMAIN_SCOPE_REJECTION_PHRASES):
             meta_logger.log_unmatched_query(
                 query_text=request.message,
-                reason="OFF_TOPIC_PMC_SCOPE_REJECTION",
+                reason="OFF_TOPIC_DOMAIN_SCOPE_REJECTION",
                 session_id=conversation_id,
             )
 

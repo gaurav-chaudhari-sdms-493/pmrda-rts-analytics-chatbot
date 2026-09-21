@@ -62,7 +62,7 @@ class RunSqlTool(Tool[RunSqlToolArgs]):
         if sql_upper.startswith("COPY") or " COPY " in sql_upper or "\nCOPY " in sql_upper:
             error_message = (
                 "PostgreSQL COPY commands are strictly forbidden and will fail with permission denied. "
-                "Execute a standard SELECT query instead (e.g., SELECT w.ward_name, COUNT(c.id) AS total_complaints FROM complaint c LEFT JOIN ward_master w ON c.ward_id = w.id GROUP BY w.ward_name). "
+                "Execute a standard SELECT query instead (e.g., SELECT column_name, COUNT(*) AS total_count FROM table_name GROUP BY column_name). "
                 "run_sql automatically executes SELECT queries and saves the output to a CSV file for visualization."
             )
             return ToolResult(
