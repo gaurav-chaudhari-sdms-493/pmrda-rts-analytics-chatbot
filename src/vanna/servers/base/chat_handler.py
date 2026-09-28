@@ -167,7 +167,7 @@ class ChatHandler:
             prompt_tokens = max(120, len(request.message) * 4)
             completion_tokens = max(40, len(full_agent_response) * 2)
             total_tokens = prompt_tokens + completion_tokens
-            estimated_cost_usd = round((prompt_tokens * 0.0000004) + (completion_tokens * 0.0000008), 6)
+            estimated_cost_usd = round((prompt_tokens * (0.038 / 1_000_000.0)) + (completion_tokens * (0.55 / 1_000_000.0)), 6)
 
         llm_and_framework_ms = round(max(0.0, elapsed_ms - (sql_execution_ms or 0.0)), 2)
 

@@ -1121,13 +1121,14 @@ class Agent:
                 metadata_dict["Total Response Time"] = f"{total_turn_ms / 1000:.2f} s ({total_turn_ms:.0f} ms)"
 
                 tot_tok = total_prompt_tokens + total_completion_tokens
-                p_cost_usd = total_prompt_tokens * 0.0000004
-                c_cost_usd = total_completion_tokens * 0.0000008
+                # Pricing per 1M tokens for ~deepseek/deepseek-v4-flash-latest:nitro ($0.038 / 1M prompt, $0.55 / 1M completion)
+                p_cost_usd = total_prompt_tokens * (0.038 / 1_000_000.0)
+                c_cost_usd = total_completion_tokens * (0.55 / 1_000_000.0)
                 tot_cost_usd = p_cost_usd + c_cost_usd
                 tot_cost_inr = tot_cost_usd * 86.5
 
-                cost_usd_fmt = f"${tot_cost_usd:.5f}" if tot_cost_usd < 0.01 else f"${tot_cost_usd:.4f}"
-                cost_inr_fmt = f"₹{tot_cost_inr:.3f}" if tot_cost_inr < 0.1 else f"₹{tot_cost_inr:.2f}"
+                cost_usd_fmt = f"${tot_cost_usd:.6f}" if tot_cost_usd < 0.001 else (f"${tot_cost_usd:.5f}" if tot_cost_usd < 0.01 else f"${tot_cost_usd:.4f}")
+                cost_inr_fmt = f"₹{tot_cost_inr:.4f}" if tot_cost_inr < 0.1 else f"₹{tot_cost_inr:.2f}"
 
                 metadata_dict["Prompt Tokens"] = f"{total_prompt_tokens:,} tokens"
                 metadata_dict["Completion Tokens"] = f"{total_completion_tokens:,} tokens"
