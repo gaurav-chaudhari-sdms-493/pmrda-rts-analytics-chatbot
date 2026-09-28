@@ -1770,6 +1770,7 @@ export const richComponentStyles = css`
 
   /* Developer Info Accordion Container */
   .dev-info-container {
+    display: none !important;
     margin-top: 12px;
     margin-bottom: 16px;
     width: 100%;

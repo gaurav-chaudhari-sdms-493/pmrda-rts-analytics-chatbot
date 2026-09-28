@@ -128,6 +128,22 @@
           transform: translateY(0) scale(1);
         }
 
+        /* Fullscreen Mode */
+        #pmc-widget-window.fullscreen {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          max-width: 100vw !important;
+          max-height: 100vh !important;
+          margin: 0 !important;
+          border-radius: 0 !important;
+          z-index: 99999999 !important;
+        }
+
         /* Widget Header Bar */
         .pmc-widget-header {
           background: linear-gradient(135deg, ${primaryColor} 0%, #1e40af 100%);
@@ -177,7 +193,7 @@
         .pmc-widget-actions {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
         }
 
         .pmc-widget-new-chat-btn {
@@ -195,6 +211,7 @@
           height: 30px;
           transition: all 0.2s ease;
           outline: none;
+          margin-right: 4px;
         }
 
         .pmc-widget-new-chat-btn:hover {
@@ -213,6 +230,7 @@
           align-items: center;
           justify-content: center;
           transition: background 0.2s;
+          outline: none;
         }
 
         .pmc-widget-action-btn:hover {
@@ -274,8 +292,21 @@
                 </svg>
                 <span>New chat</span>
               </button>
+              <button class="pmc-widget-action-btn" id="pmc-widget-fullscreen-btn" title="Toggle Fullscreen">
+                <svg id="pmc-icon-maximize" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                </svg>
+                <svg id="pmc-icon-restore" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                  <path d="M4 14h6v6m10-10h-6V4M14 10l7-7M3 21l7-7"></path>
+                </svg>
+              </button>
+              <button class="pmc-widget-action-btn" id="pmc-widget-minimize-btn" title="Minimize window">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
               <button class="pmc-widget-action-btn" id="pmc-widget-close-btn" title="Close chat">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -303,25 +334,60 @@
 
       document.body.appendChild(container);
 
-      // 3. Setup Toggle & New Chat Logic
+      // 3. Setup Toggle, Fullscreen, Minimize & New Chat Logic
       const launcher = document.getElementById('pmc-widget-launcher');
       const windowEl = document.getElementById('pmc-widget-window');
       const closeBtn = document.getElementById('pmc-widget-close-btn');
+      const minimizeBtn = document.getElementById('pmc-widget-minimize-btn');
+      const fullscreenBtn = document.getElementById('pmc-widget-fullscreen-btn');
       const newChatBtn = document.getElementById('pmc-widget-new-chat-btn');
+      const maxIcon = document.getElementById('pmc-icon-maximize');
+      const restoreIcon = document.getElementById('pmc-icon-restore');
 
-      function toggleChat() {
+      function closeChat() {
+        windowEl.classList.remove('open');
+        windowEl.classList.remove('fullscreen');
+        launcher.classList.remove('open');
+        if (maxIcon && restoreIcon) {
+          maxIcon.style.display = 'block';
+          restoreIcon.style.display = 'none';
+        }
+      }
+
+      function toggleFullscreen() {
+        const isFullscreen = windowEl.classList.contains('fullscreen');
+        if (isFullscreen) {
+          windowEl.classList.remove('fullscreen');
+          if (maxIcon && restoreIcon) {
+            maxIcon.style.display = 'block';
+            restoreIcon.style.display = 'none';
+          }
+        } else {
+          windowEl.classList.add('fullscreen');
+          if (!windowEl.classList.contains('open')) {
+            windowEl.classList.add('open');
+            launcher.classList.add('open');
+          }
+          if (maxIcon && restoreIcon) {
+            maxIcon.style.display = 'none';
+            restoreIcon.style.display = 'block';
+          }
+        }
+      }
+
+      launcher.addEventListener('click', function () {
         const isOpen = windowEl.classList.contains('open');
         if (isOpen) {
-          windowEl.classList.remove('open');
-          launcher.classList.remove('open');
+          closeChat();
         } else {
           windowEl.classList.add('open');
           launcher.classList.add('open');
         }
-      }
+      });
 
-      launcher.addEventListener('click', toggleChat);
-      closeBtn.addEventListener('click', toggleChat);
+      if (closeBtn) closeBtn.addEventListener('click', closeChat);
+      if (minimizeBtn) minimizeBtn.addEventListener('click', closeChat);
+      if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreen);
 
       if (newChatBtn) {
         newChatBtn.addEventListener('click', function (e) {
