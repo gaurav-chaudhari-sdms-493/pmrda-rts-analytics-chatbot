@@ -2099,6 +2099,32 @@ export const richComponentStyles = css`
     padding: 8px 12px;
     border-bottom: 1px solid #d0d7de;
     background: #fafafa;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dataframe-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 180px;
+  }
+
+  .dataframe-actions-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .dataframe-actions-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex: 1;
+    min-width: 100px;
   }
 
   .search-input {

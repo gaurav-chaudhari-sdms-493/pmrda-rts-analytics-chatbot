@@ -504,7 +504,6 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       data = [],
       columns = [],
       title,
-      description,
       searchable = true,
       sortable = true,
       filterable = true,
@@ -1031,19 +1030,25 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
         ? 1
         : Math.max(1, Math.ceil(state.filteredRows / Number(state.pageSize || 25)));
 
-      // Render Top Bar with View Switcher Tabs
-      const headerHTML = `
-        <div class="dataframe-header">
-          <div class="dataframe-header-top">
-            <div>
-              <h3 class="dataframe-title">${this.escapeHtml(title || 'Query Results')}</h3>
-              ${description ? `<p class="dataframe-description">${this.escapeHtml(description)}</p>` : ''}
-              <div class="dataframe-meta">
-                <span class="row-count">${state.filteredRows} of ${state.totalRows} total rows</span>
-                <span class="column-count">${state.columns.length} columns</span>
-              </div>
-            </div>
+      // Render Unified Top Bar: Left (Search), Center (View Switcher Tabs), Right (Export)
+      const isAnyFilterActive = state.globalSearch.trim() !== '' || Object.values(state.columnFilters).some(s => s && s.size > 0);
 
+      const actionsHTML = `
+        <div class="dataframe-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--vanna-outline-dimmer, #e1e4e8); background: #fafafa; flex-wrap: wrap; gap: 8px;">
+          <div class="dataframe-actions-left" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px;">
+            ${searchable ? `
+              <div class="dataframe-search" style="position: relative;">
+                <input type="text" placeholder="Search grid (Ctrl+F)..." value="${this.escapeHtml(state.globalSearch)}" class="search-input" style="padding: 5px 10px; font-size: 12px; border: 1px solid #d0d7de; border-radius: 6px; width: 200px;">
+              </div>
+            ` : ''}
+            ${isAnyFilterActive ? `
+              <button class="clear-filters-btn" style="padding: 4px 8px; font-size: 11px; color: #cf222e; background: #ffebe9; border: 1px solid rgba(255,129,130,0.4); border-radius: 4px; cursor: pointer;">
+                ✕ Clear Filters
+              </button>
+            ` : ''}
+          </div>
+
+          <div class="dataframe-actions-center" style="display: flex; justify-content: center; align-items: center; flex: 1; min-width: 280px;">
             <div class="view-switcher-tabs">
               <button class="view-tab-btn ${state.activeView === 'table' ? 'active' : ''}" data-view="table">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
@@ -1063,46 +1068,24 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
               </button>
             </div>
           </div>
+
+          <div class="dataframe-actions-right" style="display: flex; justify-content: flex-end; align-items: center; flex: 1; min-width: 100px;">
+            ${exportable ? `
+              <div class="export-dropdown-container">
+                <button class="export-main-btn">
+                  <span>📥 Export</span>
+                  <span style="font-size: 9px;">▼</span>
+                </button>
+                <div class="export-menu">
+                  <button class="export-menu-item" data-export-type="csv">📄 Export to CSV (.csv)</button>
+                  <button class="export-menu-item" data-export-type="excel">📊 Export to Excel (.xlsx)</button>
+                  <button class="export-menu-item" data-export-type="pdf">🖨️ Export to PDF / Print</button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
         </div>
       `;
-
-      const isAnyFilterActive = state.globalSearch.trim() !== '' || Object.values(state.columnFilters).some(s => s && s.size > 0);
-
-      let actionsHTML = '';
-      if (searchable || exportable) {
-        actionsHTML = `
-          <div class="dataframe-actions" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--vanna-outline-dimmer, #e1e4e8);">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              ${searchable ? `
-                <div class="dataframe-search" style="position: relative;">
-                  <input type="text" placeholder="Search grid (Ctrl+F)..." value="${this.escapeHtml(state.globalSearch)}" class="search-input" style="padding: 4px 8px; font-size: 12px; border: 1px solid #d0d7de; border-radius: 6px; width: 200px;">
-                </div>
-              ` : ''}
-              ${isAnyFilterActive ? `
-                <button class="clear-filters-btn" style="padding: 4px 8px; font-size: 11px; color: #cf222e; background: #ffebe9; border: 1px solid rgba(255,129,130,0.4); border-radius: 4px; cursor: pointer;">
-                  ✕ Clear Filters
-                </button>
-              ` : ''}
-            </div>
-
-            <div class="dataframe-actions-right">
-              ${exportable ? `
-                <div class="export-dropdown-container">
-                  <button class="export-main-btn">
-                    <span>📥 Export</span>
-                    <span style="font-size: 9px;">▼</span>
-                  </button>
-                  <div class="export-menu">
-                    <button class="export-menu-item" data-export-type="csv">📄 Export to CSV (.csv)</button>
-                    <button class="export-menu-item" data-export-type="excel">📊 Export to Excel (.xlsx)</button>
-                    <button class="export-menu-item" data-export-type="pdf">🖨️ Export to PDF / Print</button>
-                  </div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        `;
-      }
 
       // Render Table Grid
       let tableHTML = '';
@@ -1204,9 +1187,8 @@ export class DataFrameComponentRenderer extends BaseComponentRenderer {
       const showTable = state.activeView === 'table';
 
       container.innerHTML = `
-        ${headerHTML}
+        ${actionsHTML}
         <div class="grid-view-table-section" style="display: ${showTable ? 'block' : 'none'};">
-          ${actionsHTML}
           ${tableHTML}
           ${paginationHTML}
         </div>
