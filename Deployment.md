@@ -106,6 +106,20 @@ ENV=production
 LOG_LEVEL=info
 ```
 
+### Remote Administrative Access (SSH Tunneling for DB Tools)
+Since the Metadata DB on port `5433` is restricted to `localhost` for security, remote database clients (e.g. Antigravity DBcode, DBeaver, DataGrip) connect via an **SSH Tunnel**:
+
+* **SSH Tunnel Tab**:
+  * **Host**: `161.35.101.60`
+  * **Port**: `22`
+  * **User**: `root`
+* **General DB Connection Tab**:
+  * **Host**: `localhost`
+  * **Port**: `5433`
+  * **User**: `postgres`
+  * **Database**: `pmc_metadata_db`
+
+
 ---
 
 ## 4. How the System Runs
