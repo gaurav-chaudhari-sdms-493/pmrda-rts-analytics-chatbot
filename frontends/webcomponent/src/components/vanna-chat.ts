@@ -23,7 +23,7 @@ export class VannaChat extends LitElement {
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: 100vh;
+        height: 100%;
         background: #ffffff;
         color: #0d0d0d;
         font-family: var(--vanna-font-family-default);
@@ -53,17 +53,8 @@ export class VannaChat extends LitElement {
       }
 
       /* ChatGPT Light Header Bar */
-      .chat-header {
-        padding: 12px 20px;
-        background: #ffffff;
-        border-bottom: 1px solid #e5e5e5;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 56px;
-        color: #0d0d0d;
-        z-index: 10;
-        flex-shrink: 0;
+      .chat-header, .pmc-hero-header {
+        display: none !important;
       }
 
       .header-left {
@@ -511,6 +502,8 @@ export class VannaChat extends LitElement {
   @property({ reflect: true }) theme = 'light';
   @property({ attribute: 'api-base' }) apiBaseUrl = '';
   @property({ attribute: 'api-url' }) set apiUrl(val: string) { if (val) this.apiBaseUrl = val; }
+  @property({ attribute: 'api-host' }) set apiHost(val: string) { if (val) this.apiBaseUrl = val; }
+  @property({ type: Boolean, attribute: 'hide-header' }) hideHeader = true;
   @property({ attribute: 'sse-endpoint' }) sseEndpoint = '/api/vanna/v2/chat_sse';
   @property({ attribute: 'ws-endpoint' }) wsEndpoint = '/api/vanna/v2/chat_websocket';
   @property({ attribute: 'poll-endpoint' }) pollEndpoint = '/api/vanna/v2/chat_poll';
@@ -894,35 +887,7 @@ export class VannaChat extends LitElement {
     return html`
       <div class="chat-layout">
         <div class="chat-main">
-          <div class="chat-header">
-            <div class="header-left">
-              <div class="chat-avatar" aria-hidden="true">⚡</div>
-              <h2 class="chat-title">
-                ${this.title}
-                <span class="model-badge">Llama 3.3 70B</span>
-              </h2>
-            </div>
-            <div class="header-top-actions">
-              <button
-                class="new-chat-btn"
-                @click=${this.resetChat}
-                .disabled=${this.disabled}
-                title="Start New Chat">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M12 5v14M5 12h14"/>
-                </svg>
-                <span>New chat</span>
-              </button>
-            </div>
-          </div>
-
           <div class="chat-messages">
-            <div class="empty-state" id="empty-state">
-              <div class="empty-state-icon">⚡</div>
-              <div class="empty-state-text">PMC AI Assistant</div>
-              <div class="empty-state-subtitle">Ask any question about PMC complaints, ward status, categories, or trends.</div>
-            </div>
-
             <div class="rich-components-container"></div>
           </div>
 

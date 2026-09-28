@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMC Portal - Floating Chatbot Widget Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    header {
+      background: #1e3a8a;
+      color: #ffffff;
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    header h2 { margin: 0; font-size: 22px; font-weight: 700; }
+    header p { margin: 4px 0 0 0; font-size: 13px; opacity: 0.85; }
+
+    .main-container {
+      max-width: 1000px;
+      margin: 40px auto;
+      background: #ffffff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+    }
+    h1 { color: #1e3a8a; font-size: 26px; margin-top: 0; }
+    p { line-height: 1.6; color: #475569; font-size: 15px; }
+
+    .code-box {
+      background: #0f172a;
+      color: #38bdf8;
+      padding: 20px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 14px;
+      margin: 24px 0;
+      line-height: 1.5;
+    }
+    .badge {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h2>Pune Municipal Corporation (पुणे महानगरपालिका)</h2>
+      <p>Official Public Services & Grievance Redressal Portal</p>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <span class="badge">Production Integration Guide</span>
+    <h1>Website Integration: PMC AI Floating Chatbot</h1>
+    <p>
+      This page demonstrates the <strong>Floating Chatbot Widget</strong> embedded directly into the Pune Municipal Corporation public portal.
+    </p>
+
+    <h3>Embed Code Snippet (Add to your Website HTML):</h3>
+    <div class="code-box">
+&lt;!-- 1. Include Vanna Web Component Assets (type="module" required) --&gt;<br>
+&lt;script type="module" src="/static/vanna-components.js"&gt;&lt;/script&gt;<br><br>
+&lt;!-- 2. Include PMC Floating Widget Script --&gt;<br>
+&lt;script src="/static/pmc-widget.js"&gt;&lt;/script&gt;<br><br>
+&lt;!-- 3. Initialize Floating Widget --&gt;<br>
+&lt;script&gt;<br>
+&nbsp;&nbsp;PMCWidget.init({<br>
+&nbsp;&nbsp;&nbsp;&nbsp;apiHost: window.location.origin,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;title: "PMC AI Assistant",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;subtitle: "पुणे महानगरपालिका AI सहाय्यक",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;position: "bottom-right",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;primaryColor: "#2563eb"<br>
+&nbsp;&nbsp;});<br>
+&lt;/script&gt;
+    </div>
+
+    <p style="margin-top: 30px; font-weight: 600; color: #2563eb;">
+      👉 Look at the bottom-right corner of your screen! Click the floating blue <strong>PMC Chat Circle</strong> to open the Floating AI Assistant widget.
+    </p>
+  </div>
+
+  <!-- 1. Include Web Component JS (type="module" is required for ES module bundles) -->
+  <script type="module" src="/static/vanna-components.js?v=4"></script>
+
+  <!-- 2. Include PMC Floating Widget Script -->
+  <script src="/static/pmc-widget.js?v=4"></script>
+
+  <!-- 3. Initialize Widget -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      PMCWidget.init({
+        apiHost: window.location.origin,
+        title: "PMC AI Assistant",
+        subtitle: "पुणे महानगरपालिका AI सहाय्यक",
+        position: "bottom-right",
+        primaryColor: "#2563eb"
+      });
+    });
+  </script>
+
+</body>
+</html>

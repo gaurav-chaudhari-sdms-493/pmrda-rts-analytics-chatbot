@@ -261,13 +261,6 @@ class DefaultWorkflowHandler(WorkflowHandler):
 
             content = (
                 f"<div class='pmc-hero-card'>\n"
-                f"  <div class='pmc-hero-header'>\n"
-                f"    <span class='pmc-logo-badge'>🏛️</span>\n"
-                f"    <div class='pmc-hero-titles'>\n"
-                f"      <h2 class='pmc-hero-title'>{self.hero_title}</h2>\n"
-                f"      {subtitle_html}\n"
-                f"    </div>\n"
-                f"  </div>\n"
                 f"  <p class='pmc-hero-desc'>\n"
                 f"    {self.hero_desc}\n"
                 f"  </p>\n"
