@@ -2997,12 +2997,11 @@ export class ComponentManager {
     if (!this.currentTurnDevInfoContainer || !this.currentTurnDevInfoContent) {
       const wrapper = document.createElement('div');
       wrapper.className = 'dev-info-container';
-      wrapper.style.display = 'none';
 
       const btn = document.createElement('button');
-      btn.className = 'dev-info-toggle-btn';
+      btn.className = 'dev-info-toggle-btn expanded';
       btn.type = 'button';
-      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-expanded', 'true');
       btn.innerHTML = `
         <span class="dev-info-icon">🛠️</span>
         <span class="dev-info-title">Developer Info</span>
@@ -3011,7 +3010,7 @@ export class ComponentManager {
       `;
 
       const content = document.createElement('div');
-      content.className = 'dev-info-content collapsed';
+      content.className = 'dev-info-content';
 
       btn.addEventListener('click', () => {
         const isCollapsed = content.classList.contains('collapsed');
