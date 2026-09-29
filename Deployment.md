@@ -1,12 +1,12 @@
-# Server Deployment Guide: Vanna AI Agent Stack
+# Server Deployment Guide: PMRDA RTS AI Agent Stack
 
-This document provides a comprehensive server deployment guide for the **PMC CMS Vanna AI Agent Stack**. It covers system architecture, required ports, frontend and backend structures, environment configurations, and step-by-step deployment instructions for production Linux servers.
+This document provides a comprehensive server deployment guide for the **PMRDA RTS AI Analytics Chatbot Stack** (Pune Metropolitan Region Development Authority). It covers system architecture, required ports, frontend and backend structures, environment configurations, and step-by-step deployment instructions for production Linux servers.
 
 ---
 
 ## 1. System Architecture & Structure
 
-The system consists of a decoupled frontend and backend architecture designed for low-latency streaming responses, dynamic database introspection, and secure LLM-driven query generation.
+The system consists of a decoupled frontend and backend architecture designed for low-latency streaming responses, dynamic database introspection, and secure LLM-driven query generation against the **PMRDA RTS Database (PostgreSQL 16)**.
 
 ```
                        ┌──────────────────────────────────────────────┐
@@ -28,10 +28,10 @@ The system consists of a decoupled frontend and backend architecture designed fo
 └──────┬──────────────────────┬────────────┘
        │                      │
        ▼                      ▼
-┌──────────────┐      ┌─────────────────┐      ┌──────────────────────────────────┐
-│  OpenRouter  │      │  PMC CMS Primary│      │ PMC Metadata PostgreSQL (5433)   │
-│  LLM API     │      │  PostgreSQL     │      │ (Sessions, Memory & Audit Logs)  │
-└──────────────┘      └─────────────────┘      └──────────────────────────────────┘
+┌──────────────┐      ┌─────────────────────────┐      ┌──────────────────────────────────┐
+│  OpenRouter  │      │  PMRDA RTS Primary DB   │      │ PMRDA Metadata PostgreSQL (5433) │
+│  LLM API     │      │  PostgreSQL (Port 5432) │      │ (Sessions, Memory & Audit Logs)  │
+└──────────────┘      └─────────────────────────┘      └──────────────────────────────────┘
 ```
 
 ### Component Breakdown
@@ -41,17 +41,17 @@ The system consists of a decoupled frontend and backend architecture designed fo
 * **Entry Point**: `main.py`
 * **Framework**: FastAPI with Uvicorn ASGI server (runs on **Port 8000**).
 * **Core Responsibilities**:
-  * Exposes RESTful endpoints and Server-Sent Events (SSE) for streamed AI reasoning.
-  * Connects to PostgreSQL databases for live schema fetching, SQL execution, and user session management.
-  * Seeds business rules and domain knowledge into `DemoAgentMemory`.
-  * Integrates with OpenRouter LLM service (`https://openrouter.ai/api/v1`).
-  * Mounts static frontend distribution assets (`frontends/webcomponent/dist`).
+  * Exposes RESTful endpoints and Server-Sent Events (SSE) on `/api/vanna/v2/chat_sse` for streamed AI reasoning.
+  * Connects to the primary PMRDA RTS PostgreSQL database for live schema extraction and read-only query execution.
+  * Seeds PMRDA business rules, domain knowledge, and manual Question-SQL training pairs into `DemoAgentMemory`.
+  * Integrates with OpenRouter LLM API service (`https://openrouter.ai/api/v1`).
+  * Mounts compiled static frontend distribution assets (`frontends/webcomponent/dist` at `/static`).
 
-#### B. Frontend (Web Component & Web App)
+#### B. Frontend (Web Component & Floating Embed Widget)
 
 * **Location**: `frontends/webcomponent`
 * **Tech Stack**: TypeScript, Lit (Web Components), Chart.js, Plotly.js, Vite.
-* **Build Artifacts**: Compiled static bundle (`dist/vanna-components.js`, demo HTML pages).
+* **Build Artifacts**: Compiled production bundle (`dist/vanna-components.js`, `dist/floating-widget-demo.html`).
 * **Modes**:
   * **Development Mode**: Served via Vite dev server on **Port 5173**.
   * **Production Mode**: Built static bundle embedded directly via `<vanna-chat>` tag, served via FastAPI static file route (`/static/vanna-components.js`) or Nginx.
@@ -60,65 +60,74 @@ The system consists of a decoupled frontend and backend architecture designed fo
 
 * **Entry Point**: `streamlit_app.py`
 * **Framework**: Streamlit (runs on **Port 8501**).
-* **Purpose**: Provides an internal, interactive chat UI and schema exploration dashboard for administrators.
+* **Purpose**: Provides an internal, interactive chat UI and schema exploration dashboard for administrators and developers.
 
 #### D. Database Tier
 
-* **Primary Database (PMC CMS)**: Remote or local PostgreSQL instance containing operational data (`complaint`, `ward_master`, `category_master`, etc.).
-* **Metadata Database**: Local PostgreSQL instance (**Port 5433** or **5432**) storing conversation history, agent memory, and audit execution logs.
+* **Primary Database (PMRDA RTS)**: Remote or local PostgreSQL instance containing operational RTS data (`rts_citizen_applications`, `sdk_aw_workflow_tasks`, `sdk_pg_transactions`, `sdk_svc_services`, `sdk_core_villages`, etc.).
+* **Metadata Database**: Local PostgreSQL instance (**Port 5433** or **5432**) storing conversation history, agent memory, and audit execution logs (`pmrda_metadata_db`).
 
 ---
 
 ## 2. Required Network Ports
 
-The following ports must be configured in firewall rules (e.g., `ufw`, security groups, or iptables):
+The following ports must be configured in firewall rules (`ufw`, cloud security groups, or iptables):
 
 | Port Number           | Protocol | Direction        | Component / Service                 | Description / Access Scope                              |
 | :-------------------- | :------- | :--------------- | :---------------------------------- | :------------------------------------------------------ |
-| **80 / 443**    | TCP      | Inbound          | Nginx Web Server                    | Public entry point for HTTP/HTTPS client traffic.       |
-| **8000**        | TCP      | Inbound/Internal | FastAPI Backend (`main.py`)       | Core API service & static asset host.                   |
-| **5173**        | TCP      | Inbound/Internal | Vite Dev Server                     | **Development only**. Frontend dev environment.   |
-| **8501**        | TCP      | Inbound/Internal | Streamlit UI (`streamlit_app.py`) | Optional internal admin dashboard.                      |
-| **5432 / 5433** | TCP      | Outbound/Local   | PostgreSQL Databases                | Primary database & local metadata database connections. |
-| **443**         | TCP      | Outbound         | OpenRouter API                      | HTTPS outbound calls to`https://openrouter.ai`.       |
+| **80 / 443**          | TCP      | Inbound          | Nginx Web Server                    | Public entry point for HTTP/HTTPS client traffic.       |
+| **8000**              | TCP      | Inbound/Internal | FastAPI Backend (`main.py`)         | Core API service & static asset host.                   |
+| **5173**              | TCP      | Inbound/Internal | Vite Dev Server                     | **Development only**. Frontend dev environment.         |
+| **8501**              | TCP      | Inbound/Internal | Streamlit UI (`streamlit_app.py`)   | Optional internal admin dashboard.                      |
+| **5432 / 5433**       | TCP      | Outbound/Local   | PostgreSQL Databases                | PMRDA RTS database & local metadata database.           |
+| **443**               | TCP      | Outbound         | OpenRouter API                      | HTTPS outbound calls to `https://openrouter.ai`.        |
 
 ---
 
 ## 3. Required Environment Configurations
 
-Create a `.env` file in the root directory of the project (`/home/stark/PycharmProjects/vanna/.env`).
+Create a `.env` file in the root directory of the project (`/var/www/pmrda-rts-analytics-chatbot/.env`).
 
 ### `.env` File Template
 
 ```env
-# Primary PostgreSQL Database Connection (CMS Data)
-DATABASE_URL=postgresql+asyncpg://<username>:<password>@<db-host>:<db-port>/<database_name>
+# -----------------------------------------------------------------------------
+# Database Connections
+# -----------------------------------------------------------------------------
+# Main PMRDA RTS Database (read-only recommended)
+DATABASE_URL=postgresql+asyncpg://pmrda_rts_readonly:<password>@<db-host>:5432/PMRDA-RTS
 
-# PMC Metadata PostgreSQL Database Connection (Sessions & Audit Logs)
-METADATA_DATABASE_URL=postgresql+asyncpg://postgres:<password>@localhost:5433/pmc_metadata_db
+# PMRDA Metadata Database (local sessions, templates, execution logs)
+METADATA_DATABASE_URL=postgresql+asyncpg://postgres:<password>@localhost:5433/pmrda_metadata_db
 
-# OpenRouter LLM API Configuration
+# -----------------------------------------------------------------------------
+# OpenRouter API Key & LLM Configuration
+# -----------------------------------------------------------------------------
 OPENROUTER_API_KEY=sk-or-v1-your-actual-api-key-here
 OPENROUTER_LLM_MODEL=deepseek/deepseek-v4-flash-0731:nitro
 
+# -----------------------------------------------------------------------------
 # Application Environment Settings
+# -----------------------------------------------------------------------------
+HOST=0.0.0.0
+PORT=8000
+FEED_LIVE_SCHEMA=true
 ENV=production
 LOG_LEVEL=info
 ```
 
 ### Remote Administrative Access (SSH Tunneling for DB Tools)
-Since the Metadata DB on port `5433` is restricted to `localhost` for security, remote database clients (e.g. Antigravity DBcode, DBeaver, DataGrip) connect via an **SSH Tunnel**:
+
+If the database or metadata database is restricted to private IP/localhost for security, connect remote database GUI clients (e.g. DBeaver, DataGrip, Antigravity DBcode) via an **SSH Tunnel**:
 
 * **SSH Tunnel Tab**:
-  * **Host**: `161.35.101.60`
+  * **Host**: `<Your-Bastion-or-Server-IP>`
   * **Port**: `22`
-  * **User**: `root`
+  * **User**: `ubuntu` (or server user)
 * **General DB Connection Tab**:
-  * **Host**: `localhost`
-  * **Port**: `5433`
-  * **User**: `postgres`
-  * **Database**: `pmc_metadata_db`
-
+  * **Host**: `localhost` (or internal DB host)
+  * **Port**: `5432` / `5433`
+  * **Database**: `PMRDA-RTS` / `pmrda_metadata_db`
 
 ---
 
@@ -134,6 +143,7 @@ In local development, both backend and frontend dev servers run concurrently usi
 
 * **FastAPI Backend**: `http://localhost:8000`
 * **Vite Frontend**: `http://localhost:5173`
+* **Widget Demo**: `http://localhost:5173/static/floating-widget-demo.html`
 
 ### Production Workflow
 
@@ -157,7 +167,7 @@ This section details standard production deployment on an Ubuntu / Debian server
 ### Step 1: System Prerequisites Installation
 
 ```bash
-sudo apt update && sudo apt install -y python3-pip python3-venv nodejs npm nginx git
+sudo apt update && sudo apt install -y python3-pip python3-venv nodejs npm nginx git curl
 ```
 
 ### Step 2: Repository & Python Environment Setup
@@ -165,8 +175,8 @@ sudo apt update && sudo apt install -y python3-pip python3-venv nodejs npm nginx
 ```bash
 # Clone project repository
 cd /var/www
-git clone <repository-url> vanna
-cd /var/www/vanna
+git clone https://github.com/gaurav-chaudhari-sdms-493/pmrda-rts-analytics-chatbot.git
+cd /var/www/pmrda-rts-analytics-chatbot
 
 # Create virtual environment
 python3 -m venv venv
@@ -180,96 +190,106 @@ pip install -e ".[fastapi,postgres]"
 ### Step 3: Build Web Component Frontend Assets
 
 ```bash
-cd /var/www/vanna/frontends/webcomponent
+cd /var/www/pmrda-rts-analytics-chatbot/frontends/webcomponent
 npm install
 npm run build
+cd /var/www/pmrda-rts-analytics-chatbot
 ```
 
-*This produces production assets in `/var/www/vanna/frontends/webcomponent/dist`.*
+*This compiles production assets in `/var/www/pmrda-rts-analytics-chatbot/frontends/webcomponent/dist`.*
 
 ### Step 4: Configure Environment Variables
 
-Create `/var/www/vanna/.env` and insert your database connections and API keys.
+Create `/var/www/pmrda-rts-analytics-chatbot/.env` with your database credentials and API key:
 
 ```bash
-sudo nano /var/www/vanna/.env
+nano /var/www/pmrda-rts-analytics-chatbot/.env
 ```
 
-### Step 5: Setup Systemd Service for Backend (`vanna-backend.service`)
+### Step 5: Setup Systemd Service for Backend (`pmrda-chatbot-backend.service`)
 
 Create a systemd unit file to keep FastAPI running automatically:
 
 ```bash
-sudo nano /etc/systemd/system/vanna-backend.service
+sudo nano /etc/systemd/system/pmrda-chatbot-backend.service
 ```
 
 Add the following contents:
 
 ```ini
 [Unit]
-Description=Vanna AI Agent FastAPI Backend Service
+Description=PMRDA RTS AI Chatbot FastAPI Backend Service
 After=network.target postgresql.service
 
-[User]
+[Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/vanna
-EnvironmentFile=/var/www/vanna/.env
-ExecStart=/var/www/vanna/venv/bin/python main.py
+WorkingDirectory=/var/www/pmrda-rts-analytics-chatbot
+EnvironmentFile=/var/www/pmrda-rts-analytics-chatbot/.env
+ExecStart=/var/www/pmrda-rts-analytics-chatbot/venv/bin/python main.py
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+Set permissions, enable, and start the service:
 
 ```bash
+sudo chown -R www-data:www-data /var/www/pmrda-rts-analytics-chatbot
 sudo systemctl daemon-reload
-sudo systemctl enable vanna-backend
-sudo systemctl start vanna-backend
-sudo systemctl status vanna-backend
+sudo systemctl enable pmrda-chatbot-backend
+sudo systemctl start pmrda-chatbot-backend
+sudo systemctl status pmrda-chatbot-backend
 ```
 
-### Step 6 (Optional): Setup Systemd Service for Streamlit (`vanna-streamlit.service`)
+### Step 6 (Optional): Setup Systemd Service for Streamlit (`pmrda-chatbot-streamlit.service`)
 
-If running the Streamlit admin app:
+If running the Streamlit admin dashboard on Port 8501:
 
 ```bash
-sudo nano /etc/systemd/system/vanna-streamlit.service
+sudo nano /etc/systemd/system/pmrda-chatbot-streamlit.service
 ```
 
 Add the following contents:
 
 ```ini
 [Unit]
-Description=Vanna AI Streamlit Admin Interface
+Description=PMRDA RTS AI Streamlit Admin Interface
 After=network.target
 
-[User]
+[Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/var/www/vanna
-EnvironmentFile=/var/www/vanna/.env
-ExecStart=/var/www/vanna/venv/bin/streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+WorkingDirectory=/var/www/pmrda-rts-analytics-chatbot
+EnvironmentFile=/var/www/pmrda-rts-analytics-chatbot/.env
+ExecStart=/var/www/pmrda-rts-analytics-chatbot/venv/bin/streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start:
+Enable and start Streamlit:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable vanna-streamlit
-sudo systemctl start vanna-streamlit
+sudo systemctl enable pmrda-chatbot-streamlit
+sudo systemctl start pmrda-chatbot-streamlit
 ```
 
-### Step 7: Nginx Reverse Proxy & SSL Configuration
+---
 
-Create an Nginx configuration file for the domain:
+## 6. Nginx Reverse Proxy Configuration
+
+Configure Nginx to serve the site with SSL and proxy API/SSE requests to FastAPI.
+
+Create `/etc/nginx/sites-available/pmrda-chatbot`:
 
 ```bash
-sudo nano /etc/nginx/sites-available/vanna
+sudo nano /etc/nginx/sites-available/pmrda-chatbot
 ```
 
 Add the following configuration:
@@ -277,33 +297,59 @@ Add the following configuration:
 ```nginx
 server {
     listen 80;
-    server_name vanna.yourdomain.com;
+    server_name pmrda-chatbot.yourdomain.com;
 
-    # Proxy REST API, SSE Streaming & Static Assets to FastAPI
-    location / {
+    client_max_body_size 50M;
+
+    # Static Assets & Web Component Distribution
+    location /static/ {
+        alias /var/www/pmrda-rts-analytics-chatbot/frontends/webcomponent/dist/;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+    }
+
+    # FastAPI SSE Streaming Endpoint (Crucial: buffer disabled for instant token streaming)
+    location /api/vanna/v2/chat_sse {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
-      
-        # SSE Streaming Headers
         proxy_set_header Connection '';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-      
-        # Disable buffering for SSE streaming
+
+        # Disable buffering for Server-Sent Events (SSE)
         proxy_buffering off;
         proxy_cache off;
-        proxy_read_timeout 86400s;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
 
-    # Optional: Route Streamlit Dashboard under /admin
-    location /admin {
-        proxy_pass http://127.0.0.1:8501;
+    # FastAPI General API Routes
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    # Health Check Endpoint
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        proxy_set_header Host $host;
+    }
+
+    # Root: Default to Fullscreen Web Component Interface or Widget Demo
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
@@ -311,81 +357,28 @@ server {
 Enable site and test configuration:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/vanna /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/pmrda-chatbot /etc/nginx/sites-enabled/
 sudo nginx -t
-sudo systemctl restart nginx
+sudo systemctl reload nginx
 ```
 
-Enable HTTPS via Let's Encrypt Certbot:
+### SSL Setup with Let's Encrypt (Certbot)
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d vanna.yourdomain.com
+sudo certbot --nginx -d pmrda-chatbot.yourdomain.com
 ```
 
 ---
 
-## 6. Alternative Containerized Deployment (Docker & Docker Compose)
+## 7. Production Verification & Smoke Tests
 
-For containerized environments, use the following `docker-compose.yml` configuration:
+After deployment, verify system health using the following checklist:
 
-```yaml
-version: '3.8'
-
-services:
-  metadata-db:
-    image: postgres:15-alpine
-    container_name: vanna-metadata-db
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres_password
-      POSTGRES_DB: pmc_metadata_db
-    ports:
-      - "5433:5432"
-    volumes:
-      - metadata_db_data:/var/lib/postgresql/data
-
-  vanna-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: vanna-backend
-    restart: always
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      - metadata-db
-
-volumes:
-  metadata_db_data:
-```
-
----
-
-## 7. Verification & Health Monitoring
-
-1. **API Healthcheck Endpoint**:
-
-   ```bash
-   curl http://localhost:8000/health
-   ```
-
-   *Expected output*: `{"status":"healthy","service":"vanna"}`
-2. **System Logs Inspection**:
-
-   * FastAPI Backend Logs: `sudo journalctl -u vanna-backend -f`
-   * Application File Logs: `tail -f /var/www/vanna/main.log`
-   * Nginx Access & Error Logs: `sudo tail -f /var/log/nginx/error.log`
-
----
-
-## 8. Summary Checklist
-
-* [ ] Firewall opened for Ports **80/443** (Public) and internal **8000 / 8501**.
-* [ ] `.env` file populated with valid `DATABASE_URL`, `METADATA_DATABASE_URL`, and `OPENROUTER_API_KEY`.
-* [ ] Frontend static assets compiled via `npm run build` in `frontends/webcomponent`.
-* [ ] Systemd services active (`vanna-backend.service`).
-* [ ] Nginx reverse proxy configured with SSE support (`proxy_buffering off;`) and SSL active.
+| Verification Step | Command / URL | Expected Result |
+| :--- | :--- | :--- |
+| **Backend Health** | `curl -s http://127.0.0.1:8000/health` | `{"status":"healthy","service":"vanna"}` |
+| **Systemd Status** | `sudo systemctl status pmrda-chatbot-backend` | `Active: active (running)` |
+| **Nginx Status** | `sudo systemctl status nginx` | `Active: active (running)` |
+| **Static Asset Load** | `curl -I https://pmrda-chatbot.yourdomain.com/static/vanna-components.js` | `HTTP/1.1 200 OK` |
+| **SSE Chat Stream** | Send a test query via frontend web UI | Real-time SQL execution & answer |
