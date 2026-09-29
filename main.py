@@ -27,10 +27,10 @@ from vanna.integrations.openai import OpenAILlmService
 from vanna.integrations.postgres import PostgresRunner, PostgresConversationStore
 from vanna.integrations.local.agent_memory import DemoAgentMemory
 from vanna.core.filter import ContextWindowFilter
-from vanna.prompts import PmcSchemaSystemPromptBuilder, BUSINESS_CONTEXT_DOCUMENTATION
+from vanna.prompts import PmrdaSchemaSystemPromptBuilder, PmcSchemaSystemPromptBuilder, BUSINESS_CONTEXT_DOCUMENTATION
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("pmc_chatbot.schema")
+logger = logging.getLogger("pmrda_chatbot.schema")
 
 # Load environment variables
 load_dotenv()
@@ -65,7 +65,11 @@ CACHE_TTL_SECONDS = 300
 
 
 def fetch_live_database_schema() -> str:
-    """Returns raw table and column metadata directly from PostgreSQL or static fallback catalog."""
+    """Returns raw table and column metadata directly from PostgreSQL, dynamically excluding empty tables (0 rows)."""
+    if os.getenv("FEED_LIVE_SCHEMA", "false").lower() != "true":
+        logger.info("Live database schema feeding is DISABLED (FEED_LIVE_SCHEMA != true). Relying strictly on Business Rules and Manual Question-SQL Training in Agent Memory.")
+        return "No live database schema provided. Rely strictly on Business Rules and Manual Question-SQL Pair Training in Agent Memory."
+
     global _schema_cache, _cache_timestamp
     now = time.time()
 
@@ -75,25 +79,42 @@ def fetch_live_database_schema() -> str:
     try:
         import psycopg2
 
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
         cursor = conn.cursor()
+
+        # Step 1: Discover all base tables in public schema
         cursor.execute(
-            r"""
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE'
+            ORDER BY table_name;
+            """
+        )
+        all_tables = [r[0] for r in cursor.fetchall()]
+
+        # Step 2: Dynamically filter tables to include ONLY active operational tables (>0 rows) and exclude backup/snapshot tables (bak_*)
+        active_tables = set()
+        for t_name in all_tables:
+            # Exclude backup and staging snapshot tables
+            if t_name.startswith('bak_') or t_name.startswith('_bak_'):
+                continue
+            try:
+                cursor.execute(f'SELECT EXISTS (SELECT 1 FROM "{t_name}" LIMIT 1);')
+                if cursor.fetchone()[0]:
+                    active_tables.add(t_name)
+            except Exception:
+                conn.rollback()
+
+        # Step 3: Fetch column metadata for active tables only
+        cursor.execute(
+            """
             SELECT table_name, column_name, data_type
             FROM information_schema.columns
             WHERE table_schema = 'public'
-              AND table_name NOT LIKE '\_%'
-              AND table_name NOT LIKE 'vw\_%'
-              AND table_name NOT LIKE 'migration\_%'
-              AND table_name NOT LIKE 'notification\_%'
-              AND table_name NOT LIKE 'sequelize%'
-              AND table_name NOT LIKE 'Sequelize%'
-              AND table_name NOT LIKE '%_log'
-              AND table_name NOT LIKE '%_cache'
-              AND table_name NOT LIKE '%_config'
-              AND table_name NOT LIKE '%_permission'
             ORDER BY table_name, ordinal_position;
-        """
+            """
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -101,9 +122,10 @@ def fetch_live_database_schema() -> str:
 
         tables = {}
         for t_name, c_name, d_type in rows:
-            tables.setdefault(t_name, []).append(f"{c_name} ({d_type})")
+            if t_name in active_tables:
+                tables.setdefault(t_name, []).append(f"{c_name} ({d_type})")
 
-        catalog_lines = ["DATABASE TABLES & COLUMNS:"]
+        catalog_lines = [f"DATABASE TABLES & COLUMNS (Active Useful Tables: {len(tables)}):"]
         for table_name, cols in tables.items():
             catalog_lines.append(f"\nTable `{table_name}`:")
             for col in cols:
@@ -111,35 +133,87 @@ def fetch_live_database_schema() -> str:
 
         _schema_cache = "\n".join(catalog_lines)
         _cache_timestamp = now
+        logger.info(f"Successfully fetched live DB schema for {len(tables)} active operational tables (excluding empty & backup tables).")
         return _schema_cache
     except Exception as e:
-        logger.warning(f"Live schema query failed, using static catalog fallback: {e}")
+        logger.warning(f"Live schema query failed, using static active tables catalog fallback: {e}")
         _schema_cache = """
-DATABASE TABLES & COLUMNS:
-Table `complaint`:
-  - id (integer)
-  - complaint_number (character varying)
-  - title (character varying)
-  - description (text)
-  - category_id (integer)
-  - sub_category_id (integer)
-  - ward_id (integer)
-  - citizen_id (integer)
+DATABASE TABLES & COLUMNS (Active Useful Tables Fallback Catalog):
+
+Table `rts_citizen_applications`:
+  - id (uuid)
+  - application_number (character varying)
+  - service_id (uuid)
+  - service_name (character varying)
+  - applicant_name (character varying)
+  - applicant_email (character varying)
+  - applicant_mobile (character varying)
   - status (character varying)
-  - created_at (timestamp without time zone)
+  - department_id (uuid)
+  - submitted_at (timestamp with time zone)
+  - created_at (timestamp with time zone)
+  - updated_at (timestamp with time zone)
 
-Table `category_master`:
-  - id (integer)
-  - category_name (character varying)
+Table `sdk_dg_documents`:
+  - id (uuid)
+  - application_id (uuid)
+  - document_number (character varying)
+  - document_name (character varying)
+  - template_id (uuid)
+  - status (character varying)
+  - generated_at (timestamp with time zone)
 
-Table `sub_category_master`:
-  - id (integer)
-  - category_id (integer)
-  - sub_category_name (character varying)
+Table `sdk_aw_workflow_tasks`:
+  - id (uuid)
+  - instance_id (uuid)
+  - application_id (uuid)
+  - task_name (character varying)
+  - assigned_user_id (uuid)
+  - department_id (uuid)
+  - status (character varying)
+  - created_at (timestamp with time zone)
 
-Table `ward_master`:
-  - id (integer)
-  - ward_name (character varying)
+Table `sdk_pg_transactions`:
+  - id (uuid)
+  - transaction_number (character varying)
+  - application_id (uuid)
+  - amount (numeric)
+  - payment_gateway (character varying)
+  - status (character varying)
+  - payment_date (timestamp with time zone)
+
+Table `sdk_svc_services`:
+  - id (uuid)
+  - service_name (character varying)
+  - department_id (uuid)
+  - is_active (boolean)
+
+Table `sdk_svc_departments`:
+  - id (uuid)
+  - department_name (character varying)
+
+Table `sdk_rbac_users`:
+  - id (uuid)
+  - username (character varying)
+  - email (character varying)
+  - full_name (character varying)
+  - designation (character varying)
+
+Table `sdk_svc_service_sla`:
+  - id (uuid)
+  - service_id (uuid)
+  - sla_days (integer)
+
+Table `sdk_core_villages`:
+  - id (uuid)
+  - village_name (character varying)
+  - taluka_id (uuid)
+
+Table `license_master`:
+  - id (uuid)
+  - license_number (character varying)
+  - holder_name (character varying)
+  - license_type (character varying)
 """
         _cache_timestamp = now
         return _schema_cache
@@ -148,12 +222,14 @@ Table `ward_master`:
 # 3. Dynamic System Prompt Builder & Business Context documentation are imported from vanna.prompts
 # (See src/vanna/prompts.py for system prompt templates, rules, and domain documentation)
 
+from vanna_training_data import register_training_data
+
 # 4. Configure Agent Memory
 agent_memory = DemoAgentMemory(max_items=1000)
 
 
 async def seed_domain_knowledge(memory: DemoAgentMemory, user: CoreUser):
-    """Seed manual business rules and context into agent memory."""
+    """Seed manual business rules, context, and manual Question-SQL training pairs into agent memory."""
     dummy_context = ToolContext(
         user=user,
         conversation_id="system_init",
@@ -163,6 +239,10 @@ async def seed_domain_knowledge(memory: DemoAgentMemory, user: CoreUser):
     for doc in BUSINESS_CONTEXT_DOCUMENTATION:
         await memory.save_text_memory(content=doc, context=dummy_context)
     logger.info("Successfully seeded domain knowledge and business rules into Agent Memory.")
+
+    # Register manual Question-SQL training pairs from vanna_training_data.py
+    count = await register_training_data(memory, user=user)
+    logger.info(f"Successfully seeded {count} manual Question-SQL training pairs from vanna_training_data.py into Agent Memory.")
 
 
 # 5. Configure User Resolver
@@ -189,10 +269,9 @@ vanna_agent = Agent(
     tool_registry=tools,
     user_resolver=user_resolver,
     agent_memory=agent_memory,
-    system_prompt_builder=PmcSchemaSystemPromptBuilder(schema_provider=fetch_live_database_schema),
+    system_prompt_builder=PmrdaSchemaSystemPromptBuilder(schema_provider=fetch_live_database_schema),
     conversation_filters=[ContextWindowFilter(max_questions=5)],
 )
-
 
 
 # Alias for backwards compatibility
@@ -213,5 +292,5 @@ if __name__ == "__main__":
             "cdn_url": "/static/vanna-components.js",
         },
     )
-    server.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8040")))
-    # server.run()
+    port = int(os.getenv("PORT", 8000))
+    server.run(port=port)

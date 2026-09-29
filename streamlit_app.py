@@ -16,7 +16,7 @@ load_dotenv()
 
 # Page configuration
 st.set_page_config(
-    page_title="PMC CMS AI - Specialized Data Assistant",
+    page_title="PMRDA RTS AI - Specialized Data Assistant",
     page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -95,10 +95,10 @@ async def get_agent_response(prompt: str):
 
 # Sidebar
 with st.sidebar:
-    st.title("🏛️ PMC CMS Assistant")
+    st.title("🏛️ PMRDA RTS Assistant")
     st.markdown("### Domain Knowledge & Status")
     st.info(f"**LLM:** `{os.getenv('OPENROUTER_LLM_MODEL', 'meta-llama/llama-3.3-70b-instruct')}`")
-    st.success("✅ **Database:** PMC PostgreSQL Connected")
+    st.success("✅ **Database:** PMRDA RTS PostgreSQL Connected")
     st.success("🧠 **Memory:** Business Context Seeded")
 
     if st.button("🗑️ Clear Chat History", use_container_width=True):
@@ -106,8 +106,8 @@ with st.sidebar:
         st.rerun()
 
 # Page Header
-st.markdown('<div class="main-header">Pune Municipal Corporation (PMC) Data Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Specialized AI trained on PMC CMS business rules, ward alias mappings, and complaint schema.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Pune Metropolitan Region Development Authority (PMRDA) RTS Data Assistant</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Specialized AI trained on PMRDA RTS business rules, service SLAs, and application schema.</div>', unsafe_allow_html=True)
 
 # Initialize Session Chat History
 if "messages" not in st.session_state:
@@ -123,13 +123,13 @@ for msg in st.session_state.messages:
                 render_ui_component(comp)
 
 # Chat Input Handler
-if prompt := st.chat_input("Ask a complaint or ward question (e.g. 'Show total complaints in Bibwewadi from 17 March to 2 September')..."):
+if prompt := st.chat_input("Ask an RTS application or service question (e.g. 'Show total applications count till now')..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing schema, ward aliases & domain knowledge..."):
+        with st.spinner("Analyzing schema, services & domain knowledge..."):
             components = asyncio.run(get_agent_response(prompt))
             st.session_state.messages.append({"role": "assistant", "components": components})
             for comp in components:

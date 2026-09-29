@@ -2997,6 +2997,7 @@ export class ComponentManager {
     if (!this.currentTurnDevInfoContainer || !this.currentTurnDevInfoContent) {
       const wrapper = document.createElement('div');
       wrapper.className = 'dev-info-container';
+      wrapper.style.display = 'none';
 
       const btn = document.createElement('button');
       btn.className = 'dev-info-toggle-btn';

@@ -50,8 +50,15 @@ echo "[1/2] Starting FastAPI Backend on http://0.0.0.0:8000..."
 "$PYTHON_BIN" main.py &
 BACKEND_PID=$!
 
-# Wait briefly for backend initialization
-sleep 2
+# Wait for backend initialization (memory seeding can take a few seconds on boot)
+echo "Waiting for FastAPI Backend to be ready on port 8000..."
+for i in {1..30}; do
+    if curl -s http://127.0.0.1:8000/health >/dev/null 2>&1; then
+        echo "Backend is ready!"
+        break
+    fi
+    sleep 1
+done
 
 # 3. Start Web Components Frontend (Port 5173)
 if [ -d "$SCRIPT_DIR/frontends/webcomponent" ]; then

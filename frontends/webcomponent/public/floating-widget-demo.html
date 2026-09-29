@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PMC Portal - Floating Chatbot Widget Demo</title>
+  <title>PMRDA Portal - Floating Chatbot Widget Demo</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏛️</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -66,30 +67,30 @@
 
   <header>
     <div>
-      <h2>Pune Municipal Corporation (पुणे महानगरपालिका)</h2>
-      <p>Official Public Services & Grievance Redressal Portal</p>
+      <h2>Pune Metropolitan Region Development Authority (PMRDA)</h2>
+      <p>Official RTS Public Services & Analytics Portal</p>
     </div>
   </header>
 
   <div class="main-container">
     <span class="badge">Production Integration Guide</span>
-    <h1>Website Integration: PMC AI Floating Chatbot</h1>
+    <h1>Website Integration: PMRDA RTS AI Floating Chatbot</h1>
     <p>
-      This page demonstrates the <strong>Floating Chatbot Widget</strong> embedded directly into the Pune Municipal Corporation public portal.
+      This page demonstrates the <strong>Floating Chatbot Widget</strong> embedded directly into the Pune Metropolitan Region Development Authority public portal.
     </p>
 
     <h3>Embed Code Snippet (Add to your Website HTML):</h3>
     <div class="code-box">
 &lt;!-- 1. Include Vanna Web Component Assets (type="module" required) --&gt;<br>
 &lt;script type="module" src="/static/vanna-components.js"&gt;&lt;/script&gt;<br><br>
-&lt;!-- 2. Include PMC Floating Widget Script --&gt;<br>
+&lt;!-- 2. Include PMRDA Floating Widget Script --&gt;<br>
 &lt;script src="/static/pmc-widget.js"&gt;&lt;/script&gt;<br><br>
 &lt;!-- 3. Initialize Floating Widget --&gt;<br>
 &lt;script&gt;<br>
 &nbsp;&nbsp;PMCWidget.init({<br>
 &nbsp;&nbsp;&nbsp;&nbsp;apiHost: window.location.origin,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;title: "PMC AI Assistant",<br>
-&nbsp;&nbsp;&nbsp;&nbsp;subtitle: "पुणे महानगरपालिका AI सहाय्यक",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;title: "PMRDA AI Assistant",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;subtitle: "पुणे महानगर प्रदेश विकास प्राधिकरण AI सहाय्यक",<br>
 &nbsp;&nbsp;&nbsp;&nbsp;position: "bottom-right",<br>
 &nbsp;&nbsp;&nbsp;&nbsp;primaryColor: "#2563eb"<br>
 &nbsp;&nbsp;});<br>
@@ -97,23 +98,23 @@
     </div>
 
     <p style="margin-top: 30px; font-weight: 600; color: #2563eb;">
-      👉 Look at the bottom-right corner of your screen! Click the floating blue <strong>PMC Chat Circle</strong> to open the Floating AI Assistant widget.
+      👉 Look at the bottom-right corner of your screen! Click the floating blue <strong>PMRDA Chat Circle</strong> to open the Floating AI Assistant widget.
     </p>
   </div>
 
   <!-- 1. Include Web Component JS (type="module" is required for ES module bundles) -->
-  <script type="module" src="/static/vanna-components.js?v=7"></script>
+  <script type="module" src="/static/vanna-components.js?v=11"></script>
 
-  <!-- 2. Include PMC Floating Widget Script -->
-  <script src="/static/pmc-widget.js?v=7"></script>
+  <!-- 2. Include PMRDA Floating Widget Script -->
+  <script src="/static/pmc-widget.js?v=11"></script>
 
   <!-- 3. Initialize Widget -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       PMCWidget.init({
         apiHost: window.location.origin,
-        title: "PMC AI Assistant",
-        subtitle: "पुणे महानगरपालिका AI सहाय्यक",
+        title: "PMRDA AI Assistant",
+        subtitle: "पुणे महानगर प्रदेश विकास प्राधिकरण AI सहाय्यक",
         position: "bottom-right",
         primaryColor: "#2563eb"
       });
